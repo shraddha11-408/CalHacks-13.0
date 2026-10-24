@@ -1,0 +1,120 @@
+# Stepwise edge config. Secrets live in .env, never here.
+# Every device sits behind an interface; pick the implementation here.
+
+devices:
+  # MVP: the browser owns the webcam (MediaPipe). Set true to also run the edge ArUco pipeline.
+  edge_camera: false
+  # webcam = laptop webcam (OpenCV). pi_stream = Pi 5 + OV5647 MJPEG stream.
+  # file = loop an image/video (file_path) for tests and eval clips.
+  camera: webcam
+  webcam_index: 0
+  pi_stream_url: http://stepwise-pi.local:8080/stream.mjpg
+  file_path: props/aruco_test_mat.png
+  frame_size: [640, 480]
+  fps: 15
+  # laptop = built-in mic. xvf3800 = USB mic array (name match below).
+  mic: laptop
+  xvf3800_name_match: "XVF3800"
+  # laptop = built-in speaker. xvf3800 = mic array audio out (OPEN, AGENTS.md §14).
+  speaker: laptop
+  # keyboard = press "h" in the edge console. uno_q = Uno Q wrist node over Wi-Fi.
+  wrist: keyboard
+  uno_q_url: http://stepwise-wrist.local
+
+# MVP coach loop (PLAN.md §2). The browser reads these via /public-config.
+coach:
+  pause_s: 0.8                # hands still this long → snapshot
+  still_move: 0.006           # mean landmark motion per frame (normalized) counted as still
+  rearm_move: 0.015           # motion above this re-arms the pause trigger
+  left_area_s: 0.5            # no hands in the work area this long → snapshot
+  timeout_s: 8                # no check this long → snapshot
+  done_confirm: 2             # advance only after this many "done" answers in a row (AGENTS.md §6 debounce)
+  done_min_gap_s: 1.0         # ...at least this far apart
+  done_confidence: 0.75       # a "done" below this counts as unclear
+  low_confidence: 0.6         # below this counts as unclear
+  unclear_escalate: 2         # unclear/low-confidence this many times → Claude with last 3 frames
+  snapshot_px: 768            # long side of snapshots sent to models (small printed words need detail)
+  keyframe_min_gap_s: 1.5     # teach: min time between key frames
+  keyframes_max: 20
+  live_interval_s: 4          # Steps page live check: also snapshot this often while the camera runs
+  mark_with: claude           # who draws the on-screen mistake box: claude (accurate, +2-4 s) | bitdeer (instant, less accurate)
+  check_timeout_s: 8          # ≈ GLM p90 (7.6 s); slower checks hand over to Claude (~2 s) instead of waiting
+
+spacetimedb:
+  target: local               # local = spacetime start on this laptop (no Wi-Fi needed); maincloud = .env host/module
+  local_uri: http://127.0.0.1:3000
+  local_db: stepwise
+
+server:
+  edge_host: 127.0.0.1
+  edge_port: 8000
+  web_port: 5173
+
+models:
+  # Confirm exact IDs against current docs before integration (CLAUDE.md).
+  claude: claude-opus-5-5            # all Claude calls; effort per use below
+  claude_effort_teach: high          # step list from key frames (once per task)
+  claude_effort_judge: low           # unclear checks (latency matters)
+  claude_effort_answer: low          # open questions from the worker
+  bitdeer_base_url: https://api-inference.bitdeer.ai/v1
+  bitdeer_vision: zai-org/GLM-5.3-Flash   # best on the goal-based prompt: eval/results/live_prompt.json
+  bitdeer_vision_alt: Qwen/Qwen3.8-27B    # runner-up
+  cartesia_tts: sonic-3.6           # WebSocket streaming; verified in kill-test
+  cartesia_stt: ink-2               # realtime (/stt/turns/websocket); batch uses ink-whisper
+
+thresholds:
+  gate_settle_s: 0.5          # scene still this long after a change → check
+  gate_pixel_delta: 25        # per-pixel abs diff (0-255) counted as "changed"
+  gate_change_frac: 0.02      # > this share of pixels changed → scene is moving
+  gate_still_frac: 0.005      # < this share changed → scene is still (hysteresis)
+  gate_size: [160, 120]       # gate works on a small blurred grayscale copy
+  keyframe_settle_s: 1.0      # teach mode keyframe pick
+  checker_timeout_ms: 200
+  checker_confident: 0.85
+  bitdeer_escalate_below: 0.7 # below this → Claude
+  advance_done_count: 2
+  advance_min_gap_s: 1.0
+  correct_wrong_count: 2
+  correction_cooldown_s: 10
+  shadow_promote_agree: 10
+  help_escalate_s: 20
+  moss_top_k: 3
+  moss_min_score: 0.5         # tune on scripted questions
+  fade_promote_streak: 3
+  fade_demote_errors: 2
+  fade_demote_window: 5
+
+workspace:
+  type: aruco_tray
+  aruco_dict: DICT_4X4_50
+  marker_ids: [0, 1, 2, 3]    # TL, TR, BR, BL
+  rectified_size: [800, 600]  # px, top-down tray canvas
+  # Slot rectangles in normalized rectified coords: [x, y, w, h]
+  slots:
+    slot_A: [0.05, 0.05, 0.42, 0.40]   # top-left: blue soap
+    slot_B: [0.53, 0.05, 0.42, 0.40]   # top-right: green shampoo
+    slot_C: [0.05, 0.55, 0.42, 0.40]   # bottom-left: yellow lotion
+    slot_D: [0.53, 0.55, 0.42, 0.40]   # bottom-right: folded washcloth
+  done_mark: [0.40, 0.92, 0.20, 0.08]  # placeholder; measure on the real tray
+
+voice:
+  default_rate: 1.0
+  slower_step: 0.15
+  default_pause_ms: 400
+
+# Item colors for checkers, OpenCV HSV scale (H 0-179, S/V 0-255).
+# Written by the HSV calibration tool on Worker View; edit by hand if needed.
+# A range with lo hue > hi hue wraps around 0 (reds).
+hsv:
+  soap:
+    lo: [100, 120, 60]
+    hi: [130, 255, 255]
+  shampoo:
+    lo: [40, 80, 50]
+    hi: [85, 255, 255]
+  lotion:
+    lo: [18, 100, 100]
+    hi: [35, 255, 255]
+  cloth:
+    lo: [0, 0, 180]
+    hi: [179, 45, 255]

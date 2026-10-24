@@ -1,0 +1,13 @@
+{
+  "name": "stepwise-droid-runner",
+  "private": true,
+  "version": "0.0.0",
+  "type": "module",
+  "description": "Claims compile_jobs, runs Factory Droid in a per-job sandbox folder, runs held-out tests.",
+  "scripts": {
+    "start": "node runner.mjs"
+  },
+  "dependencies": {
+    "@factory/droid-sdk": "^0.10.0"
+  }
+}

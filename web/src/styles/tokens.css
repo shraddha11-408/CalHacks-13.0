@@ -1,0 +1,168 @@
+/* Stepwise design tokens. Calm, warm, trustworthy.
+   Every text/background pair here is checked for WCAG AA (scripts/check_contrast.mjs).
+   Red is only for help/urgent. A worker's mistake is amber ("almost"), never red. */
+
+:root {
+  color-scheme: light;
+
+  --font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
+
+  /* Surfaces & ink */
+  --bg: #faf6ef;
+  --surface: #ffffff;
+  --surface-2: #f3ede3;
+  --ink: #1f2a2e;
+  --ink-2: #4a5558;
+  --line: #ddd4c6;
+  --focus: #0f5e5c;
+
+  /* Primary: deep teal */
+  --primary: #0f5e5c;
+  --primary-hover: #0b4a48;
+  --on-primary: #ffffff;
+  --primary-soft: #dcefed;
+  --primary-soft-ink: #0b4a48;
+
+  /* States */
+  --success: #1c6e38;
+  --success-bg: #e2f1e6;
+  --almost: #7a4f00;
+  --almost-bg: #fcefd3;
+  --almost-fill: #e0a030;
+  --urgent: #a8231b;
+  --urgent-bg: #fbe6e4;
+  --on-urgent: #ffffff;
+  --urgent-fill: #b3261e;
+  --idle: #6b7477;
+
+  /* Tier badges (text on soft bg) */
+  --tier-checker: #1c6e38;
+  --tier-checker-bg: #e2f1e6;
+  --tier-bitdeer: #1d55a0;
+  --tier-bitdeer-bg: #e4eefa;
+  --tier-claude: #6a3a9c;
+  --tier-claude-bg: #efe7f8;
+  --tier-moss: #0c6360;
+  --tier-moss-bg: #dcf0ee;
+
+  /* Tier chart fills (validated categorical palette, light) */
+  --chart-checker: #2e8540;
+  --chart-bitdeer: #4a86e0;
+  --chart-claude: #a0429a;
+  --chart-moss: #00968f;
+  --chart-grid: #e8e1d5;
+
+  /* Simulated ribbon */
+  --sim-bg: #3d3a35;
+  --sim-ink: #fff4d6;
+
+  /* Tray illustration */
+  --tray: #e9dfcf;
+  --tray-edge: #c9bba5;
+  --slot: #f7f1e7;
+  --item-soap: #2f6fcc;
+  --item-shampoo: #2e8540;
+  --item-lotion: #f2c230;
+  --item-cloth: #ffffff;
+
+  --radius: 14px;
+  --radius-sm: 8px;
+  --shadow: 0 1px 2px rgba(31, 42, 46, 0.06), 0 4px 16px rgba(31, 42, 46, 0.06);
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 240ms;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme='light']) {
+    color-scheme: dark;
+    --bg: #141a1c;
+    --surface: #1c2427;
+    --surface-2: #232d31;
+    --ink: #eee9e1;
+    --ink-2: #b8b2a8;
+    --line: #34403f;
+    --focus: #5cc2bc;
+    --primary: #5cc2bc;
+    --primary-hover: #7fd3ce;
+    --on-primary: #062a29;
+    --primary-soft: #16383a;
+    --primary-soft-ink: #a6e3df;
+    --success: #7fd69a;
+    --success-bg: #173322;
+    --almost: #f3c06a;
+    --almost-bg: #3a2c12;
+    --almost-fill: #e0a030;
+    --urgent: #f4a19a;
+    --urgent-bg: #3d1a18;
+    --on-urgent: #2a0b09;
+    --urgent-fill: #f28b82;
+    --idle: #8d9699;
+    --tier-checker: #7fd69a;
+    --tier-checker-bg: #173322;
+    --tier-bitdeer: #9cc2f5;
+    --tier-bitdeer-bg: #172a45;
+    --tier-claude: #d2b2f2;
+    --tier-claude-bg: #2d1f42;
+    --tier-moss: #7fd8d1;
+    --tier-moss-bg: #123533;
+    --chart-checker: #4aa35b;
+    --chart-bitdeer: #5a8fe0;
+    --chart-claude: #b95ab0;
+    --chart-moss: #1fa89f;
+    --chart-grid: #2b3639;
+    --sim-bg: #f3e3b8;
+    --sim-ink: #2b2410;
+    --tray: #3a342b;
+    --tray-edge: #574e40;
+    --slot: #2a2620;
+    --item-cloth: #f4f1ea;
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  }
+}
+
+:root[data-theme='dark'] {
+  color-scheme: dark;
+  --bg: #141a1c;
+  --surface: #1c2427;
+  --surface-2: #232d31;
+  --ink: #eee9e1;
+  --ink-2: #b8b2a8;
+  --line: #34403f;
+  --focus: #5cc2bc;
+  --primary: #5cc2bc;
+  --primary-hover: #7fd3ce;
+  --on-primary: #062a29;
+  --primary-soft: #16383a;
+  --primary-soft-ink: #a6e3df;
+  --success: #7fd69a;
+  --success-bg: #173322;
+  --almost: #f3c06a;
+  --almost-bg: #3a2c12;
+  --almost-fill: #e0a030;
+  --urgent: #f4a19a;
+  --urgent-bg: #3d1a18;
+  --on-urgent: #2a0b09;
+  --urgent-fill: #f28b82;
+  --idle: #8d9699;
+  --tier-checker: #7fd69a;
+  --tier-checker-bg: #173322;
+  --tier-bitdeer: #9cc2f5;
+  --tier-bitdeer-bg: #172a45;
+  --tier-claude: #d2b2f2;
+  --tier-claude-bg: #2d1f42;
+  --tier-moss: #7fd8d1;
+  --tier-moss-bg: #123533;
+  --chart-checker: #4aa35b;
+  --chart-bitdeer: #5a8fe0;
+  --chart-claude: #b95ab0;
+  --chart-moss: #1fa89f;
+  --chart-grid: #2b3639;
+  --sim-bg: #f3e3b8;
+  --sim-ink: #2b2410;
+  --tray: #3a342b;
+  --tray-edge: #574e40;
+  --slot: #2a2620;
+  --item-cloth: #f4f1ea;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+}

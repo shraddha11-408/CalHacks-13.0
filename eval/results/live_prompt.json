@@ -1,0 +1,1266 @@
+{
+  "ran_at": "2026-10-24 00:54:44",
+  "n_cases": 30,
+  "report": [
+    {
+      "config": "Qwen3.8-27B \u00b7 prompt v1 \u00b7 with example photo",
+      "accuracy": 0.6333333333333333,
+      "done_recognized": 0.6666666666666666,
+      "mistakes_caught": 0.5555555555555556,
+      "false_corrections": 0.06666666666666667,
+      "by_variant": {
+        "original": 0.7,
+        "rotated_recolored": 0.7,
+        "zoomed_mirrored": 0.5
+      },
+      "p50_ms": 8212,
+      "rows": [
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.8,
+          "reason": "Cup still on table, not picked up yet.",
+          "ms": 2350
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.8,
+          "reason": "Cup still on table, not held yet.",
+          "ms": 2938
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.8,
+          "reason": "White cup still on table, not held yet.",
+          "ms": 3705
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker holds the white cup with green logo.",
+          "ms": 2128
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Worker holds the white cup with green logo.",
+          "ms": 2163
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker is holding the white cup with the green logo.",
+          "ms": 2688
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve held near cup, words read right side up.",
+          "ms": 2826
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve held near cup, words read right side up.",
+          "ms": 2938
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "The words on the sleeve are upside down.",
+          "ms": 5765
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 11014
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 11045
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 11051
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 11005
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 10768
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 10803
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "original",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 10708
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 10945
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.8,
+          "reason": "Sleeve sits on the middle and the logo shows above it.",
+          "ms": 8469
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve on cup, words read right side up.",
+          "ms": 4531
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve words read right side up, matching the reference.",
+          "ms": 6318
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down, logo is upright.",
+          "ms": 9937
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words appear upside down on the cup.",
+          "ms": 9582
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve is on the cup but the words are upside down.",
+          "ms": 10398
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "unclear",
+          "conf": 0.0,
+          "reason": "no answer",
+          "ms": 10942
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down while the logo is right side up.",
+          "ms": 9633
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.85,
+          "reason": "Sleeve words are upside down while logo is right side up.",
+          "ms": 8212
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.85,
+          "reason": "Sleeve words are upside down on the cup.",
+          "ms": 8166
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.85,
+          "reason": "Sleeve is on the table, not on the cup yet.",
+          "ms": 5244
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.7,
+          "reason": "Cup has no sleeve on it; sleeve lies on table.",
+          "ms": 8010
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.7,
+          "reason": "Sleeve is off the cup, lying on the table.",
+          "ms": 7497
+        }
+      ]
+    },
+    {
+      "config": "Qwen3.8-27B \u00b7 prompt v2 \u00b7 with example photo",
+      "accuracy": 0.6,
+      "done_recognized": 0.75,
+      "mistakes_caught": 0.5555555555555556,
+      "false_corrections": 0.06666666666666667,
+      "by_variant": {
+        "original": 0.7,
+        "rotated_recolored": 0.6,
+        "zoomed_mirrored": 0.5
+      },
+      "p50_ms": 6632,
+      "rows": [
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "Cup is still on the table, not held.",
+          "ms": 6632
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "Cup is still on the table, not held yet.",
+          "ms": 4998
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "Cup still on table, no hand holding it yet.",
+          "ms": 5066
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker is holding the white cup with the green logo.",
+          "ms": 5102
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Worker is holding the white cup with green logo, not a can.",
+          "ms": 6259
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve held near cup and words read right side up.",
+          "ms": 6849
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve held near cup with words readable upright.",
+          "ms": 6449
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.85,
+          "reason": "Sleeve words are upside down.",
+          "ms": 12631
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.8,
+          "reason": "Sleeve wraps lower middle, logo shows above it.",
+          "ms": 9813
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve snug in middle, logo above, not too low.",
+          "ms": 5012
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve on middle, logo above, not too low.",
+          "ms": 8901
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve sits on the middle and the logo shows above it.",
+          "ms": 12794
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve on cup and its words read upright.",
+          "ms": 6604
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.82,
+          "reason": "Sleeve on cup and words read right side up.",
+          "ms": 6096
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down even though cup logo is upright.",
+          "ms": 10846
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.85,
+          "reason": "Sleeve words are upside down on the cup.",
+          "ms": 13030
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words appear upside down on the cup.",
+          "ms": 7776
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down on the cup.",
+          "ms": 6518
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words appear upside down on the cup.",
+          "ms": 6903
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down; QR code flipped to top.",
+          "ms": 13586
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.92,
+          "reason": "Sleeve is on the table, not on the cup yet.",
+          "ms": 6480
+        }
+      ]
+    },
+    {
+      "config": "Qwen3.8-27B \u00b7 prompt v2 \u00b7 no example photo",
+      "accuracy": 0.7,
+      "done_recognized": 0.8333333333333334,
+      "mistakes_caught": 0.4444444444444444,
+      "false_corrections": 0.06666666666666667,
+      "by_variant": {
+        "original": 0.7,
+        "rotated_recolored": 0.9,
+        "zoomed_mirrored": 0.5
+      },
+      "p50_ms": 5644,
+      "rows": [
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.95,
+          "reason": "The cup is on the table, not being held yet.",
+          "ms": 2514
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.95,
+          "reason": "The cup is still on the table, not held.",
+          "ms": 2272
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.95,
+          "reason": "The cup is still on the table, not being held.",
+          "ms": 2659
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker is holding the correct cup and cans are on the table.",
+          "ms": 4493
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Cup with green logo is held up; no can picked.",
+          "ms": 4192
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker is holding the white cup with green logo; no can picked up.",
+          "ms": 3914
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve held near cup with words right side up.",
+          "ms": 5654
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.82,
+          "reason": "Sleeve held near cup and its words read right side up.",
+          "ms": 5605
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 1.0,
+          "reason": "The words on the sleeve are upside down.",
+          "ms": 2637
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.72,
+          "reason": "Sleeve held near cup with words right side up.",
+          "ms": 6006
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.72,
+          "reason": "Sleeve still at the bottom, not slid up to the middle yet.",
+          "ms": 13104
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 1.0,
+          "reason": "The sleeve is still in the hand and has not been slid onto the cup.",
+          "ms": 3181
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve is on the middle, logo shows above it.",
+          "ms": 3256
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve is on the middle and the logo shows above it.",
+          "ms": 6691
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve is on the middle of the cup with the logo showing above it.",
+          "ms": 9131
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve is on cup and its words read right side up.",
+          "ms": 5240
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve is on the cup and its words read upright.",
+          "ms": 5644
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down while the cup logo is upright.",
+          "ms": 7521
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.72,
+          "reason": "Sleeve words appear upside down while cup logo is upright.",
+          "ms": 12179
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.7,
+          "reason": "Sleeve words look upside down on the cup.",
+          "ms": 11291
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.8,
+          "reason": "Sleeve is on and its words read right side up.",
+          "ms": 7181
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down while cup logo is upright.",
+          "ms": 10177
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.7,
+          "reason": "Sleeve words look upside down next to upright logo.",
+          "ms": 6742
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.72,
+          "reason": "Sleeve is on the table, not on the cup, so the check cannot be done yet.",
+          "ms": 14087
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.95,
+          "reason": "Sleeve is not on the cup yet.",
+          "ms": 3772
+        }
+      ]
+    },
+    {
+      "config": "GLM-5.3-Flash \u00b7 prompt v2 \u00b7 with example photo",
+      "accuracy": 0.7666666666666667,
+      "done_recognized": 0.75,
+      "mistakes_caught": 0.5555555555555556,
+      "false_corrections": 0.03333333333333333,
+      "by_variant": {
+        "original": 0.9,
+        "rotated_recolored": 0.9,
+        "zoomed_mirrored": 0.5
+      },
+      "p50_ms": 4391,
+      "rows": [
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "Cup is still on the table, not picked up yet.",
+          "ms": 4974
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "The coffee cup is still on the table, not yet picked up.",
+          "ms": 3390
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "Cup is still on the table, not picked up yet.",
+          "ms": 4643
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker holds the correct coffee cup, not a can.",
+          "ms": 3155
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker is holding the correct white cup with green logo, not a can.",
+          "ms": 3277
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Worker is holding the correct white coffee cup with green logo.",
+          "ms": 2692
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve is held near cup with words readable upright.",
+          "ms": 3883
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve is held near cup with words readable right side up.",
+          "ms": 3178
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.85,
+          "reason": "Sleeve text is flipped upside down, unlike the readable example.",
+          "ms": 7562
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.75,
+          "reason": "Sleeve is mid-slide, still low and tilted, not yet snug around middle.",
+          "ms": 6941
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.85,
+          "reason": "Sleeve is still at the cup's bottom, not slid up around the middle yet.",
+          "ms": 4404
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.6,
+          "reason": "Sleeve is being slid up but still held tilted, not yet seated snugly.",
+          "ms": 9641
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Sleeve is snug on lower middle, logo visible above, not falling off.",
+          "ms": 4182
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.9,
+          "reason": "Sleeve is snug on the lower middle and logo shows above it.",
+          "ms": 4001
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "conf": 0.95,
+          "reason": "Sleeve is on the cup and its words read right side up.",
+          "ms": 3632
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "conf": 0.85,
+          "reason": "Sleeve is on the cup with words facing right side up.",
+          "ms": 5523
+        },
+        {
+          "t": 18.0,
+          "step": 3,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.9,
+          "reason": "Sleeve words are upside down while the cup logo is upright.",
+          "ms": 4391
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.8,
+          "reason": "Sleeve words are upside down; QR code is above the text.",
+          "ms": 12979
+        },
+        {
+          "t": 22.5,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "error",
+          "conf": null,
+          "reason": "APITimeoutError",
+          "ms": 0
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "conf": 0.95,
+          "reason": "Sleeve words are upside down compared to the cup logo.",
+          "ms": 4055
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "conf": 0.92,
+          "reason": "Sleeve words read upside down while cup logo is upright.",
+          "ms": 4325
+        },
+        {
+          "t": 24.0,
+          "step": 3,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "conf": 0.9,
+          "reason": "Sleeve text reads upside down compared to the cup logo.",
+          "ms": 5076
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "conf": 0.92,
+          "reason": "Sleeve is still on the table, not slid onto the cup yet.",
+          "ms": 4885
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "conf": 0.9,
+          "reason": "Sleeve is still on the table, not slid onto the cup yet.",
+          "ms": 6240
+        },
+        {
+          "t": 5.0,
+          "step": 3,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "conf": 0.95,
+          "reason": "Sleeve is still on the table, not slid onto the cup yet.",
+          "ms": 4031
+        }
+      ]
+    }
+  ]
+}

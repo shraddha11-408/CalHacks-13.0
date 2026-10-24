@@ -1,0 +1,38 @@
+# Secrets
+.env
+.env.*
+!.env.example
+
+# Python
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Node
+node_modules/
+dist/
+
+# Data that must never leave the laptop / repo
+eval/clips/
+consent/
+droid/sandboxes/
+
+# OS / editor
+.DS_Store
+
+# Kill-test artifacts (may contain webcam frames)
+scripts/killtests/out/
+
+# Local SpacetimeDB server data
+spacetime/data/
+
+# Edge data: task frames/audio, alert photos, Moss memory cache
+data/
+
+# Test-set photos (may show hands/workplace)
+eval/test_set/*.jpg
+
+# Copied from node_modules by web postinstall
+web/public/mediapipe-wasm/
+spacetime/spacetime.local.json

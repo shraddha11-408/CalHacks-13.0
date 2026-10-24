@@ -1,0 +1,159 @@
+{
+  "camera": {
+    "status": "pass",
+    "detail": "640x480 at 29.8 fps, mean brightness 134/255",
+    "timings_ms": {
+      "open_to_first_frame": 1368.8,
+      "per_frame": 33.6
+    },
+    "extra": {
+      "fps": 29.8,
+      "width": 640,
+      "height": 480
+    },
+    "ran_at": "2026-10-23 21:45:41"
+  },
+  "aruco": {
+    "status": "partial",
+    "detail": "synthetic OK (slot error \u2264 2.2px); live saw markers none \u2014 hold up printed page 4 to finish",
+    "timings_ms": {
+      "detect_rectify_p50": 1.2,
+      "detect_rectify_p99": 5.4
+    },
+    "extra": {
+      "slot_corner_max_err_px": 2.18,
+      "live_markers_seen": [],
+      "live_rectified": false
+    },
+    "ran_at": "2026-10-23 22:07:44"
+  },
+  "bitdeer": {
+    "status": "pass",
+    "detail": "vision OK on 3/5 models (DeepSeek-V4.1-Flash 1432ms, Qwen3.8-27B 1110ms, GLM-5.3-Flash 1089ms); fastest zai-org/GLM-5.3-Flash",
+    "timings_ms": {
+      "best_p50": 1113.5,
+      "best_max": 1595.6
+    },
+    "extra": {
+      "models": {
+        "deepseek-ai/DeepSeek-V4.1-Flash": {
+          "ok": true,
+          "answer": "A",
+          "raw": "{\"slot\":\"A\"}",
+          "latency_ms": 1432,
+          "tokens": 450
+        },
+        "zai-org/GLM-5.3": {
+          "ok": false,
+          "error": "BadRequestError: Error code: 400 - {'error': {'code': None, 'message': 'invalid request', 'param': None, 'type': 'invalid_request_error'}}",
+          "latency_ms": 302
+        },
+        "Qwen/Qwen3.8-27B": {
+          "ok": true,
+          "answer": "A",
+          "raw": "{\"slot\": \"A\"}",
+          "latency_ms": 1110,
+          "tokens": 663
+        },
+        "zai-org/GLM-5.3-Flash": {
+          "ok": true,
+          "answer": "A",
+          "raw": "{\"slot\": \"A\"}",
+          "latency_ms": 1089,
+          "tokens": 730
+        },
+        "deepseek-ai/DeepSeek-V4-Flash": {
+          "ok": false,
+          "error": "BadRequestError: Error code: 400 - {'error': {'code': None, 'message': 'invalid request', 'param': None, 'type': 'invalid_request_error'}}",
+          "latency_ms": 1396
+        }
+      },
+      "best_model": "zai-org/GLM-5.3-Flash"
+    },
+    "ran_at": "2026-10-23 21:49:17"
+  },
+  "cartesia": {
+    "status": "partial",
+    "detail": "TTS first audio 723 ms (5.12 s spoken); STT yes; clone NO",
+    "timings_ms": {
+      "tts_first_chunk": 723,
+      "tts_total": 5798.3,
+      "stt_batch": 346.9
+    },
+    "extra": {
+      "tts_model": "sonic-3.6",
+      "voice": "Harlow",
+      "tts_audio_s": 5.12,
+      "stt": "available",
+      "stt_text": "Hi, I'm your coach. Pick up the blue soap, put it in the top left slot.",
+      "clone": "NOT on plan (402): Error code: 402 - {'error_code': 'plan_upgrade_required', 'message': 'This feature is not available on the free tier, please upgrade your subscription at (https"
+    },
+    "ran_at": "2026-10-23 21:50:42"
+  },
+  "moss": {
+    "status": "pass",
+    "detail": "100 queries p50 1.43 ms / p99 2.68 ms; 5/5 scripted questions \u2192 right step; filter OK",
+    "timings_ms": {
+      "create_index": 3532.8,
+      "load_index": 2720.1,
+      "query_p50": 1.4,
+      "query_p99": 2.7
+    },
+    "extra": {
+      "answers": {
+        "where does the lotion go": {
+          "step": "s3",
+          "text": "Lotion goes bottom left. Yellow bottle.",
+          "score": 0.935
+        },
+        "what do I do with the soap": {
+          "step": "s1",
+          "text": "Pick up the blue soap. Put it in the top-left slot.",
+          "score": 0.983
+        },
+        "how do I fold the towel": {
+          "step": "s4",
+          "text": "Almost. Fold the cloth one more time.",
+          "score": 0.668
+        },
+        "which bottle is the shampoo": {
+          "step": "s2",
+          "text": "Shampoo, top right.",
+          "score": 0.848
+        },
+        "I'm done, where does the tray go": {
+          "step": "s5",
+          "text": "Slide the tray to the done mark.",
+          "score": 0.932
+        }
+      },
+      "filter_ok": true,
+      "queries": 100,
+      "index": "killtest_guidance_jordan"
+    },
+    "ran_at": "2026-10-23 21:57:30"
+  },
+  "droid": {
+    "status": "pass",
+    "detail": "session completed; 43 events streamed (13 tool calls); runner re-ran tests: pass",
+    "timings_ms": {
+      "session_start": 2102,
+      "first_event": 2428.2,
+      "total": 21435.7
+    },
+    "extra": {
+      "job_id": "killtest-1792818385144",
+      "sandbox": "droid/sandboxes/killtest-1792818385144",
+      "event_counts": {
+        "user": 2,
+        "tool_call": 13,
+        "assistant": 14,
+        "tool_result": 13,
+        "result": 1
+      },
+      "runner_pytest": "2 passed in 0.02s",
+      "events_file": "scripts/killtests/out/droid_events_killtest-1792818385144.jsonl"
+    },
+    "ran_at": "2026-10-23 22:06:46"
+  }
+}

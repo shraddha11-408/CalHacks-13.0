@@ -4,6 +4,27 @@
 
 This file is the source of truth for anyone (human or agent) writing code in this repo. Read it fully before your first edit. If code and this file disagree, this file wins until it is updated.
 
+> ## MVP decision record (2026-10-23) — read first
+>
+> The team agreed on a smaller MVP: **[PLAN.md](PLAN.md)**. Where PLAN.md and the rest of
+> this file disagree, **PLAN.md wins**. The original full vision is archived unchanged at
+> [docs/AGENTS_v2_full_vision.md](docs/AGENTS_v2_full_vision.md); the sections below are kept
+> for reference and for post-MVP work.
+>
+> What changes for the MVP:
+> - **Demo task:** PLAN.md names towel folding; the current supervisor demo video (`videos/supervisor.mp4`) is a coffee-sleeve task.
+> - **Real-time layer:** MediaPipe hands + motion in the browser; snapshot triggers = hands pause
+>   ~0.8 s, hands leave the work area, voice "done"/"is this correct?", 8 s timeout. ArUco/tray
+>   rectification and cvlib checkers are not on the MVP path (code stays for later).
+> - **Checking:** Bitdeer vision model per snapshot → Claude with the last 3 frames when unclear or
+>   low confidence twice. No Droid-compiled tier in the MVP.
+> - **Database:** SpacetimeDB replaces Convex (no Convex key). Photos live on the edge laptop; rows hold their paths.
+> - **Talk:** Nemotron Omni is not in our Bitdeer catalog → Cartesia STT → intent → answer → Cartesia TTS.
+> - **Memory:** Moss holds plain-language notes about each worker (mistakes, preferences), queried before each step.
+> - **Privacy:** faces blurred in the browser before any frame leaves it; no video recorded or stored.
+> - **Out of MVP:** fading support, buddy routing, voice cloning, Factory, Apify, Notability.
+> - **Hardware:** laptop webcam/mic/speaker; on-screen button + spacebar stands in for the temple button.
+
 ---
 
 ## 1. What we are building
@@ -152,6 +173,8 @@ Flow:
 5. **The runner (never Droid) runs the held-out set** — frames Droid never saw, including the deliberate mistake. Pass bar: every held-out positive and negative classified correctly.
 6. Passing checkers publish with status `shadow`. In shadow they run alongside Bitdeer on live checks. After 10 agreeing live checks they are promoted to `deployed`; any disagreement drops them back to `shadow`.
 7. Every Droid event (plan, tool call, diff, test result) becomes a `compile_event` row, streamed live on the floor.
+
+**Deviation (sandboxes):** instead of a git worktree, the runner copies `droid/checker-template/` into a plain folder per compile job (`droid/sandboxes/<job_id>/`, gitignored). We avoid git operations during the build; the isolation and "Droid never pushes or deploys" guarantees are unchanged. Wherever this file says "worktree", read "per-job sandbox folder".
 
 **Helper library** (this is what makes it feasible in 36 h). Droid composes checkers from a small, tested library instead of writing raw CV:
 
