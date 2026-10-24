@@ -1,9 +1,6 @@
 """Stdlib-only MJPEG-over-HTTP server shared by the Pi streamer and the test server."""
-import json
 import sys
 import threading
-import time
-from urllib.parse import parse_qs, urlparse
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 
 BOUNDARY = "frame"
@@ -34,44 +31,7 @@ class FrameBuffer:
             return self._frame, self._seq
 
 
-class TouchState:
-    """Touch sensor state plus a short event log, readable by long-poll."""
-
-    def __init__(self, keep: int = 200):
-        self._cond = threading.Condition()
-        self._events = []  # (seq, "down" | "up", unix_ts)
-        self._seq = 0
-        self._count = 0
-        self._pressed = False
-        self._keep = keep
-
-    def set(self, pressed: bool):
-        with self._cond:
-            if pressed == self._pressed:
-                return
-            self._pressed = pressed
-            self._seq += 1
-            if pressed:
-                self._count += 1
-            self._events.append((self._seq, "down" if pressed else "up", time.time()))
-            del self._events[: -self._keep]
-            self._cond.notify_all()
-
-    def snapshot(self):
-        with self._cond:
-            return {"pressed": self._pressed, "count": self._count, "seq": self._seq}
-
-    def wait(self, since: int, timeout: float = 10.0):
-        """Events with seq > since; blocks up to timeout if there are none yet."""
-        with self._cond:
-            self._cond.wait_for(lambda: self._seq > since, timeout)
-            return {
-                "seq": self._seq,
-                "events": [{"seq": q, "type": t, "ts": ts} for q, t, ts in self._events if q > since],
-            }
-
-
-def make_server(buffer: FrameBuffer, host: str = "0.0.0.0", port: int = 8000, touch: TouchState = None):
+def make_server(buffer: FrameBuffer, host: str = "0.0.0.0", port: int = 8000):
     class Handler(BaseHTTPRequestHandler):
         protocol_version = "HTTP/1.1"
 
@@ -85,22 +45,7 @@ def make_server(buffer: FrameBuffer, host: str = "0.0.0.0", port: int = 8000, to
             self.end_headers()
             self.wfile.write(body)
 
-        def _json(self, obj):
-            self._send(200, "application/json", json.dumps(obj).encode())
-
         def do_GET(self):
-            url = urlparse(self.path)
-            if url.path in ("/touch", "/touch/events"):
-                if touch is None:
-                    self._send(404, "text/plain", b"touch sensor not enabled")
-                elif url.path == "/touch":
-                    self._json(touch.snapshot())
-                else:
-                    q = parse_qs(url.query)
-                    since = int(q.get("since", ["0"])[0])
-                    timeout = min(float(q.get("timeout", ["10"])[0]), 30.0)
-                    self._json(touch.wait(since, timeout))
-                return
             if self.path == "/health":
                 self._send(200, "text/plain", b"ok" if buffer.latest() else b"no frames")
             elif self.path == "/snapshot.jpg":

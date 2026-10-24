@@ -20,7 +20,7 @@ The loop, in one pass:
 4. **Speak in her voice (Cartesia).** Every instruction is spoken in the coach's cloned voice, with her consent.
 5. **Remember in the worker's own words (Moss).** Every step phrasing, correction and resolved help note is indexed on the laptop; the worker's questions are answered from that memory in single-digit milliseconds, in-process.
 6. **Fade support.** Per step: full instruction → short cue → mistake alerts only → silence, as the worker masters it.
-7. **Help that builds relationships.** The wrist button pages a nearby coworker buddy first, then the supervisor. Every worker and request is on a live floor in SpacetimeDB.
+7. **Help that builds relationships.** The wrist touch sensor pages a nearby coworker buddy first, then the supervisor. Every worker and request is on a live floor in SpacetimeDB.
 
 **Real vs. simulated.** The task, the checks, the voice, the help requests and every latency/cost number are real and measured. Multi-week fading data is simulated from scripted sessions and must be labeled "simulated" on every screen and slide. The voice clone is a teammate playing the coach, recorded with consent. Never clone a real coach without permission.
 
@@ -64,7 +64,7 @@ Hard rules, enforced in code review:
 
 ```
                  TEACH (once per task)                         COACH (every step, all shift)
- Coach demo + narration                              OV5647 on Pi 5 ──> Edge app (laptop)
+ Coach demo + narration                              OV5647 on Pi 5 ─USB gadget─> Edge app (laptop)
         │                                                               │ frame gating (motion settle)
         ▼                                                               │ ArUco → rectified work surface
    Claude ──> TaskSpec JSON ──┐                                         ▼
@@ -77,14 +77,14 @@ Hard rules, enforced in code review:
                        │ passes held-out tests        Tier 3: Claude
                        ▼                                      │
                  checker: shadow → deployed                   ▼
-                                                     Verdict → Cartesia voice (coach's clone) → speaker
+                                                     Verdict → Cartesia voice (coach's clone) → MacBook speaker
                                                               ▲
-                     XVF3800 mic ──> STT ──> worker question    │
+                     DJI Mic RX (Pi) ─> STT ──> worker question        │
                                              │                │
                                              ▼                │
                               Moss (in-process, <10 ms) ──────┘  (retrieved phrasing, else static, else Claude)
 
- Uno Q wrist node ──Wi-Fi──> Edge app                         ▼
+ Uno Q wrist node ─USB serial─> Edge app                         ▼
  (help + LED matrix)                          SpacetimeDB module (Maincloud)
                                               tables · reducers · scheduled jobs · procedures
                                                      │ live subscriptions
@@ -236,7 +236,7 @@ Retrieval p50/p99, share of questions answered by Moss with no model call, cost 
 
 - **Streaming TTS** for every instruction, cue and correction, so speech starts before the full sentence is generated.
 - **Cloned coach voice.** The teammate playing the coach records a short consent statement plus a voice sample. The clone is used only for this worker's guidance. No consent → stock warm voice.
-- **Speech input** for "help", "repeat", "what's next", "slower", captured on the XVF3800 mic array (§14). Use Cartesia speech-to-text if it's on our plan; otherwise Whisper or browser recognition. Tell the Cartesia judges exactly what they power.
+- **Speech input** for "help", "repeat", "what's next", "slower", captured by the DJI Mic Mini transmitters and the receiver on the Pi (§14). Use Cartesia speech-to-text if it's on our plan; otherwise Whisper or browser recognition. Tell the Cartesia judges exactly what they power.
 - **Barge-in:** if the worker speaks while the glasses talk, stop speaking and listen.
 - **Pacing per worker:** speech rate and pause length stored per worker; "slower" lowers both.
 - Ask the Cartesia booth about voice-cloning limits on the hackathon plan and latency tips. Their README requires the features used, known limitations, and no keys in the repo.
@@ -247,7 +247,7 @@ Retrieval p50/p99, share of questions answered by Moss with no model call, cost 
 
 One TypeScript module on Maincloud. **Avoid HTTP handlers, views and RLS** (beta/unstable). Procedures with outbound HTTP (`ctx.http.fetch`) are stable since v2.5 and are fine.
 
-**Tables.** `worker`, `coach`, `device` (glasses edge, wrist button, coach phone, buddy phone — one identity each) · `task`, `step`, `checker` (step, version, status `testing | shadow | deployed | retired`, agree_count) · `compile_job`, `compile_event` · `session`, `step_event` (append-only: session, step, tier, status, confidence, latency_ms, cost_usd, ts) · `prompt_event` (what was said, at which support level) · `ask_event` (question, retrieved doc ids, score, latency_ms, answered_by) · `help_request` (status `open | claimed | resolved`, claimed_by, routed_to `buddy | supervisor`) · `mastery` (worker, step, level 0–3, streak, recent_errors) · `presence` (identity, view, last heartbeat) · `consent` (worker/coach, recording, voice clone) · `metric`.
+**Tables.** `worker`, `coach`, `device` (glasses edge, wrist node, coach phone, buddy phone — one identity each) · `task`, `step`, `checker` (step, version, status `testing | shadow | deployed | retired`, agree_count) · `compile_job`, `compile_event` · `session`, `step_event` (append-only: session, step, tier, status, confidence, latency_ms, cost_usd, ts) · `prompt_event` (what was said, at which support level) · `ask_event` (question, retrieved doc ids, score, latency_ms, answered_by) · `help_request` (status `open | claimed | resolved`, claimed_by, routed_to `buddy | supervisor`) · `mastery` (worker, step, level 0–3, streak, recent_errors) · `presence` (identity, view, last heartbeat) · `consent` (worker/coach, recording, voice clone) · `metric`.
 
 **Reducers.** `register_device`, `publish_task`, `start_session`, `log_verdict`, `advance_step`, `log_prompt`, `log_ask`, `request_help`, `claim_help` (atomic; the second claimer loses and is counted), `resolve_help`, `set_support_level`, `publish_checker`, `record_shadow_result`, `claim_compile_job`, `log_compile_event`, `heartbeat`.
 
@@ -302,26 +302,29 @@ This is the confirmed hardware. Don't plan around parts that aren't on this list
 
 | Part | Purpose | Notes |
 |---|---|---|
-| Raspberry Pi 5 (8 GB RAM, 64 GB microSD) | Glasses compute: captures camera frames and streams them to the edge app | Rides on the back strap to balance the camera. Powered from a USB-C power bank |
+| Raspberry Pi 5 (8 GB RAM, 64 GB microSD) | Glasses compute: captures camera frames and mic audio and streams both to the edge app | Runs in **USB gadget mode**: one USB-C cable to the laptop is the network link (Ethernet over USB). In bring-up the Pi answered at `10.12.194.1`. Rides on the back strap to balance the camera. **OPEN:** confirm how it is powered in gadget mode and that the mic receiver runs stable on that power (a Pi 5 limits USB peripheral current when it can't get 5 A) |
 | OV5647 camera module (CSI, on the Pi 5) | Sees the task | Pi 5 has the 22-pin mini camera connector; the OV5647's stock ribbon is 15-pin, so use a 22-to-15-pin Pi 5 camera cable (30 to 50 cm reaches from the front corner to behind the ear). Capture with **Picamera2**; `cv2.VideoCapture(0)` usually won't see it. Fixed focus, weak in low light: tray 40 to 60 cm away, use the lamp |
-| XVF3800 4-microphone array | Voice in: coach narration in teach mode, worker questions and barge-in in coach mode | USB audio device. On-chip beamforming, noise suppression and echo cancellation help in a loud venue. Feeds Cartesia STT |
-| Touch sensor (Pi 5 GPIO14) | Touch input on the glasses | Digital sensor on BCM GPIO14 (header pin 8), 3.3 V. Streamer reports it at `/touch` and `/touch/events`. Job in the product not decided yet |
-| Arduino Uno Q + button | Wrist node: "I'm stuck" button; the built-in LED matrix shows status (help sent, help claimed, step done) | Button on an MCU GPIO pin to GND with the internal pull-up. Uno Q has its own Wi-Fi, so no wire to the Pi. No haptics in this build: feedback is the LED matrix plus voice |
-| Laptop (edge app) | Gating, rectify, checkers, model calls, Moss runtime, Cartesia client | Same phone hotspot as the Pi and the Uno Q |
-| Power banks | Pi 5 and Uno Q | Pi 5 limits USB peripheral current on supplies that can't negotiate 5 A; check the XVF3800 runs reliably from the bank before the demo |
-| 3D-printed glasses mount + wrist case | Looks like a product (Best Hardware) | Venue printers, queue early Saturday. Camera at the outer front corner, tilted 30 to 40 degrees down |
+| DJI Mic Mini: 2 transmitters + 1 receiver | Voice in: coach narration in teach mode, worker questions and barge-in in coach mode | Receiver plugs into the Pi over USB (verify it appears as a USB audio device in ALSA). Transmitters are clipped on the coach and the worker. **OPEN:** whether the two transmitters arrive as separate channels or one mix, and the recording level. No hardware echo cancellation (see Audio out) |
+| Arduino Uno Q + touch sensor | Wrist node: touch = "I'm stuck" / talk request; the built-in LED matrix shows status (help sent, help claimed, step done) | The touch sensor replaces the button: sensor OUT to MCU pin 2, power from 3.3 V, HIGH = touched (the sketch reads pin 2 with no internal pull). Same events as the button, now touch: `DOWN` / `UP`. Connected to the laptop by **USB serial**; its Wi-Fi is not used. No haptics in this build: feedback is the LED matrix plus voice |
+| Laptop (MacBook, edge app) | Gating, rectify, checkers, model calls, Moss runtime, Cartesia client, **speaker** | Wired to the Pi (USB-C, gadget) and the Uno Q (USB serial). Uplink for cloud APIs is venue Wi-Fi |
+| Power | Pi 5 | Uno Q is powered over its USB serial cable. **OPEN:** Pi 5 power while in gadget mode: laptop cable alone, or a data-only cable plus a separate supply. Test under camera + mic load before the demo |
+| Glasses mount + wrist band | Looks wearable | **No 3D prints for the glasses:** generic glasses frame, camera and Pi taped on with duct tape. Camera at the outer front corner, tilted 30 to 40 degrees down. **Wrist band: OPEN** (how the Uno Q and touch sensor are worn; the USB cable to the laptop limits movement) |
 
-**Data paths.** Pi 5, Uno Q and laptop join the phone hotspot (never venue Wi-Fi).
-- **Camera:** start by streaming 640x480 MJPEG at ~15 fps from the Pi to the laptop. The Pi 5 has headroom to run the motion gate and ArUco rectify on-device; moving them there means only the rectified tray ever leaves the glasses, so do it once the spine works or if Wi-Fi struggles.
-- **Wrist node:** the Uno Q POSTs `/help` to the edge app; the edge app POSTs `/status` back to the Uno Q to change the LED matrix pattern.
-- **Audio out:** the Pi 5 has no 3.5 mm audio jack. **OPEN:** play through the XVF3800's audio out (also gives echo cancellation its playback reference) or a speaker on the laptop. Either way judges must hear it, with captions on screen.
-- **XVF3800 placement, OPEN:** on the Pi (on the wearer) or the laptop (at the station). Decide after a noise test at the table.
+**Data paths.** The venue bans phone hotspots, so nothing local is wireless.
+- **Pi 5 ↔ laptop:** USB gadget mode (Ethernet over the USB-C cable). The streamer and the mic audio use this link.
+- **Uno Q ↔ laptop:** USB serial, 115200 baud, newline-terminated (`DOWN` / `UP` from the Uno, `ACK` / `BUZZ` back). Current bring-up code: `hardware/uno_q`, `hardware/backend`.
+- **Laptop ↔ cloud:** venue Wi-Fi (Bitdeer, Claude, Cartesia, SpacetimeDB). Buddy and coach phones reach SpacetimeDB Maincloud over venue Wi-Fi. **Assumption:** venue Wi-Fi is allowed; confirm with the organizers, and preload Moss and checkers so the hot path needs no network.
+- **Camera:** start by streaming 640x480 MJPEG at ~15 fps from the Pi to the laptop over the gadget link (measured: 16.3 fps, frame gap p50/p99 62/65 ms). The Pi 5 has headroom to run the motion gate and ArUco rectify on-device; moving them there means only the rectified tray ever leaves the glasses, so do it once the spine works.
+- **Mic:** DJI Mic Mini receiver on the Pi; the Pi captures it and streams the audio to the laptop for STT.
+- **Wrist node:** touch down starts a timer; release after 1.5 s or more = help request, shorter = talk request. The laptop replies `ACK` on touch down and `BUZZ` when help is sent. Help and talk requests go on to the edge app and the `request_help` reducer. LED patterns for *help claimed* and *step done* are still to build.
+- **Audio out:** the **MacBook speaker**. Cartesia streaming TTS plays on the laptop as it arrives, with captions on screen. Nothing plays on the glasses.
+- **Barge-in without echo cancellation, OPEN:** the speaker is separate from the worker's microphone, and speaker sound can leak into the transmitters. Test it at the table and gate barge-in (for example, only react to speech well above the speaker's level while TTS plays).
 
-**Fallback.** The OV5647 is CSI and can't plug into the laptop. If the Pi stream fails at judging, plug a USB webcam into the laptop or play the backup video.
+**Fallback.** The OV5647 is CSI and can't plug into the laptop. If the gadget link or the Pi stream fails at judging (replug the USB-C cable first), plug a USB webcam into the laptop or play the backup video.
 
 Wiring: jumper wires only, no soldering at the venue.
 
-**Props:** a tray with 4 printed ArUco markers on its corners and 4 marked slots; a blue soap bar, green shampoo bottle, yellow lotion, white washcloth. Steps: soap → slot A, shampoo → slot B, lotion → slot C, fold washcloth into slot D (no checker — this is where the cascade escalates), slide tray to the "done" mark.
+**Props:** generic glasses with the camera taped on; a tray with 4 printed ArUco markers on its corners and 4 marked slots; a blue soap bar, green shampoo bottle, yellow lotion, white washcloth. Steps: soap → slot A, shampoo → slot B, lotion → slot C, fold washcloth into slot D (no checker — this is where the cascade escalates), slide tray to the "done" mark.
 
 ---
 
@@ -391,7 +394,7 @@ Cartesia, Bitdeer, Anthropic and the general prizes all ride on one live moment:
 2. **0:15 Teach (20 s).** A teammate (as the coach) sets up the tray once while narrating. Steps with photos appear; Droid's plan and test results stream onto the floor as it compiles checkers.
 3. **0:35 Coach (35 s).** The judge wears the glasses and hears the coach's voice. The floor shows each check's tier lighting up: checker → Bitdeer → Claude on the fold step. The judge asks "what now?" and gets the coach's exact words back in single-digit milliseconds, with the latency on screen.
 4. **1:10 Catch (15 s).** The judge puts the lotion in the wrong slot and gets a gentle correction.
-5. **1:25 Help (15 s).** The judge presses the wrist button; a teammate's phone (the buddy) claims it on the live floor.
+5. **1:25 Help (15 s).** The judge touches and holds the wrist sensor; a teammate's phone (the buddy) claims it on the live floor.
 6. **1:40 Proof (15 s).** The tier chart (latency, cost, false-correction rate) and the fading curve (labeled simulated).
 7. **1:55 Close (5 s).** "Support that builds independence, not dependence."
 
@@ -418,9 +421,9 @@ The spine (camera → rectify → Bitdeer check → voice → floor) is done by 
 
 **Foundation — Fri 6–10 PM.** First 2 hours, kill-test the unknowns: camera frames into the laptop; ArUco detection on the printed tray; one Bitdeer vision call with timing; Cartesia streaming TTS and a voice clone; SpacetimeDB module published, a reducer called from Python, a procedure making an outbound call; Droid SDK running in a worktree; **Moss index created and queried from Python with the index preloaded**. Schema written and frozen. **Gate (10 PM):** a scripted step event shows on the floor, one instruction plays through the audio out, and a scripted question returns the right guidance line in <10 ms.
 
-**Core — Fri 10 PM → Sat 6 AM.** Teach mode → `TaskSpec`; coach loop with Bitdeer + Claude escalation, debounce rules, voice guidance; help button → floor; question path (Moss with static fallback); record the ~40 eval clips. **Gate (6 AM):** a full run of the amenity task end to end, Bitdeer-only.
+**Core — Fri 10 PM → Sat 6 AM.** Teach mode → `TaskSpec`; coach loop with Bitdeer + Claude escalation, debounce rules, voice guidance; wrist touch (help) → floor; question path (Moss with static fallback); record the ~40 eval clips. **Gate (6 AM):** a full run of the amenity task end to end, Bitdeer-only.
 
-**Upgrades — Sat 6 AM → 2 PM.** Droid checker compiler with held-out tests and shadow promotion; Uno Q wrist node (button + LED matrix status); buddy routing; fading engine; eval harness producing the numbers; queue the 3D prints early. **Gate (2 PM):** full demo with all three tiers.
+**Upgrades — Sat 6 AM → 2 PM.** Droid checker compiler with held-out tests and shadow promotion; Uno Q wrist node (touch + LED matrix status); buddy routing; fading engine; eval harness producing the numbers; tape up the glasses mount and decide the wrist band. **Gate (2 PM):** full demo with all three tiers.
 
 **Second tier — Sat 2 → 10 PM.** Replay, weekly report procedure, Bitdeer model comparison, Moss task-library search on the floor, customer reply hints (stretch). Test with someone outside the team. **Gate (10 PM):** feature freeze.
 
@@ -430,14 +433,14 @@ The spine (camera → rectify → Bitdeer check → voice → floor) is done by 
 
 | Person | Owns |
 |---|---|
-| 1 | Hardware: Pi 5 + OV5647 camera mount, XVF3800 mic, Uno Q wrist node, tray props, 3D prints |
+| 1 | Hardware: Pi 5 + OV5647 camera mount, DJI Mic Mini on the Pi, Uno Q wrist node (touch), tray props, glasses tape mount, wrist band |
 | 2 | Teach mode (Claude) + Droid checker compiler + helper library |
 | 3 | Coach loop cascade, Bitdeer, Moss question path, eval harness, latency/cost logging |
 | 4 | Cartesia voice + cloning, SpacetimeDB module + floor, pitch, README, video |
 
 ## 21. Cut order
 
-Cut in this order: customer reply hints → buddy routing (keep plain supervisor alert) → weekly report → replay → Moss question path (keep floor search and static prompts) → Droid checkers (cascade becomes Bitdeer → Claude) → 3D-printed mount.
+Cut in this order: customer reply hints → buddy routing (keep plain supervisor alert) → weekly report → replay → Moss question path (keep floor search and static prompts) → Droid checkers (cascade becomes Bitdeer → Claude).
 
 Never cut: step checking, the coach's voice, the live floor, the eval numbers.
 
@@ -449,10 +452,11 @@ Never cut: step checking, the coach's voice, the live floor, the eval numbers.
 | Bitdeer too slow | Measure Friday; use the fastest catalog model; more steps go to compiled checkers |
 | Droid can't produce passing checkers in time | Bitdeer → Claude cascade; show a recorded Droid session |
 | Voice clone not allowed on our plan | Stock warm voice; say so in the README |
-| Moss index won't load offline at the venue | Preload before the demo on the hotspot; fall back to static `TaskSpec` instructions (product still works) |
+| Moss index won't load offline at the venue | Preload before the demo, on whatever network we have; fall back to static `TaskSpec` instructions (product still works) |
 | Moss free-tier limits (index size, query volume) | Index only `guidance_<worker>` for the demo worker plus one task library |
 | SpacetimeDB procedure or Maincloud issue | Node worker behind a flag; the hot path never depends on the database |
-| Venue Wi-Fi | Phone hotspot; checkers run offline |
+| Phone hotspots banned at the venue | Pi in USB gadget mode and Uno Q on USB serial, so no local wireless; the laptop uses venue Wi-Fi for cloud only; checkers and Moss run offline |
+| USB-C gadget link or Uno serial cable unplugged or flaky | Short, strain-relieved cables; replug; backup video |
 | Pi 5 camera stream fails at the table | USB webcam into the laptop (the OV5647 is CSI and can't plug in), or the backup video |
 | Wrong camera cable (Pi 5 needs 22-pin to 15-pin) | Ask both hardware desks Friday for a Pi 5 camera cable plus a spare; fallback is a cap mount with the Pi close to the camera |
 | No real job coach quote | Say what we learned and from whom; never invent a quote |
@@ -474,7 +478,7 @@ Never cut: step checking, the coach's voice, the live floor, the eval numbers.
 - [ ] Accounts and keys: Anthropic, Bitdeer (Console → Models → API Keys), Cartesia, Factory, SpacetimeDB, Moss (`project_id` + `project_key`)
 - [ ] Buy props: tray, blue soap, green shampoo, yellow lotion, white washcloth; print 4 ArUco markers
 - [ ] Get a Pi 5 camera cable (22-pin to 15-pin, 30 to 50 cm) plus a spare, jumper wires, and a USB webcam as the camera fallback
-- [ ] Bring: Pi 5 + 64 GB microSD (Raspberry Pi OS flashed), OV5647, XVF3800 mic array, Uno Q + button, power banks, glasses frame or strap
+- [ ] Bring: Pi 5 + 64 GB microSD (Raspberry Pi OS flashed, gadget mode on), OV5647, DJI Mic Mini (2 transmitters + receiver), Uno Q + touch sensor, USB-C and USB cables long enough for the wearer to move, duct tape, a generic glasses frame
 - [ ] Record the teammate-coach's consent statement and voice sample
 
 ## 25. README requirements by sponsor
@@ -491,7 +495,7 @@ Never cut: step checking, the coach's voice, the live floor, the eval numbers.
 
 ## 26. Working conventions for agents
 
-- Python for the edge app (checkers, cascade, Moss, Cartesia client) and the Pi 5 camera streamer (Picamera2); an Arduino sketch for the Uno Q wrist node's MCU side; TypeScript for the SpacetimeDB module and the floor; do not introduce a second language for either job.
+- Python for the edge app (checkers, cascade, Moss, Cartesia client) and the Pi 5 camera and mic streamers (Picamera2, audio); an Arduino sketch for the Uno Q wrist node's MCU side; TypeScript for the SpacetimeDB module and the floor; do not introduce a second language for either job.
 - Keep the hot path synchronous and dependency-light. Anything that can block (model calls, reducer writes, indexing) goes off the frame loop.
 - Every new verdict field, table or index gets added to the schemas above *and* to the eval/logging path in the same change.
 - Write the debounce, claim-race and Moss-fallback behavior as tests. They are the product.

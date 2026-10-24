@@ -3,7 +3,6 @@ import unittest
 import urllib.request
 
 import receiver
-import touch_monitor
 from fake_server import start_fake
 
 
@@ -41,33 +40,6 @@ class StreamTest(unittest.TestCase):
         with self.assertRaises(urllib.error.HTTPError) as cm:
             urllib.request.urlopen(self.base + "/nope")
         self.assertEqual(cm.exception.code, 404)
-
-    def test_touch_state_and_events(self):
-        t = self.server.touch
-        start = touch_monitor.get_json(self.base + "/touch")
-        self.assertFalse(start["pressed"])
-        t.set(True)
-        t.set(True)  # repeated state is not a new event
-        t.set(False)
-        r = touch_monitor.get_json(f"{self.base}/touch/events?since={start['seq']}&timeout=1")
-        self.assertEqual([e["type"] for e in r["events"]], ["down", "up"])
-        end = touch_monitor.get_json(self.base + "/touch")
-        self.assertEqual(end["count"], start["count"] + 1)
-
-    def test_touch_longpoll_wakes_on_event(self):
-        import threading, time
-        since = touch_monitor.get_json(self.base + "/touch")["seq"]
-        threading.Timer(0.3, lambda: self.server.touch.set(True)).start()
-        t0 = time.monotonic()
-        r = touch_monitor.get_json(f"{self.base}/touch/events?since={since}&timeout=5")
-        self.assertLess(time.monotonic() - t0, 1.5)
-        self.assertEqual(r["events"][0]["type"], "down")
-        self.server.touch.set(False)
-
-    def test_touch_longpoll_times_out_empty(self):
-        since = touch_monitor.get_json(self.base + "/touch")["seq"]
-        r = touch_monitor.get_json(f"{self.base}/touch/events?since={since}&timeout=0.3")
-        self.assertEqual(r["events"], [])
 
 
 if __name__ == "__main__":

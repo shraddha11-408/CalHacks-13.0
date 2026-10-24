@@ -6,16 +6,13 @@ import time
 import cv2
 import numpy as np
 
-from mjpeg_http import FrameBuffer, TouchState, make_server
+from mjpeg_http import FrameBuffer, make_server
 
 
 def start_fake(port=0, fps=15, w=640, h=480):
-    """Start in background; returns (server, stop_event). port=0 picks a free port.
-    server.touch is a TouchState tests can drive with .set(True/False)."""
+    """Start in background; returns (server, stop_event). port=0 picks a free port."""
     buffer = FrameBuffer()
-    touch = TouchState()
-    server = make_server(buffer, host="127.0.0.1", port=port, touch=touch)
-    server.touch = touch
+    server = make_server(buffer, host="127.0.0.1", port=port)
     stop = threading.Event()
 
     def produce():
