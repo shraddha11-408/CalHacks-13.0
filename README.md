@@ -1,4 +1,4 @@
-# Stepwise — job coach glasses (Cal Hacks 13.0 MVP)
+# IDD Help (Stepwise) — job coach glasses (Cal Hacks 13.0 MVP)
 
 Glasses that learn a task by watching a supervisor do it once, then coach a worker with an
 intellectual or developmental disability step by step: check each step with the camera, gently
