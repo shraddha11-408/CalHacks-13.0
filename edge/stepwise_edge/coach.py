@@ -51,6 +51,9 @@ class CoachSession:
     started: float = field(default_factory=time.time)
     finished: bool = False
     done_streak: int = 0
+    done_through: int = 0  # live check: steps the model saw finished (1-based), for skipping ahead
+    mistake_streak: int = 0
+    last_correction_at: float = -1e9
     last_done_at: float = 0.0
 
     @property
@@ -82,6 +85,20 @@ class CoachSession:
     def not_done(self) -> None:
         self.done_streak = 0
 
+    def note_mistake(self, now: float, need: int, cooldown: float) -> str:
+        """AGENTS.md §6: correct only after `need` mistakes in a row, at most once per `cooldown` s.
+        Returns 'wait' (not sure yet), 'speak' (say the correction) or 'quiet' (already said it)."""
+        self.mistake_streak += 1
+        if self.mistake_streak < need:
+            return "wait"
+        if now - self.last_correction_at < cooldown:
+            return "quiet"
+        self.last_correction_at = now
+        return "speak"
+
+    def not_mistake(self) -> None:
+        self.mistake_streak = 0
+
     def note_unclear(self, escalate_after: int) -> bool:
         """Count an unclear result. True when it's time to ask Claude."""
         self.unclear += 1
@@ -91,6 +108,9 @@ class CoachSession:
         """Move to the next step. Returns True when the task is finished."""
         self.unclear = 0
         self.done_streak = 0
+        self.done_through = 0
+        self.mistake_streak = 0
+        self.last_correction_at = -1e9
         self.snapshots.clear()
         if self.step_index + 1 >= len(self.steps):
             self.finished = True

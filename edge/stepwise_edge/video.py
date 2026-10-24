@@ -36,8 +36,41 @@ def probe(path: Path) -> dict:
     fps = cap.get(cv2.CAP_PROP_FPS) or 30
     n = cap.get(cv2.CAP_PROP_FRAME_COUNT) or 0
     w, h = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH)), int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+    seekable = True
+    if n <= 0 or fps > 240:
+        # browser recordings (MediaRecorder webm) have no frame count, duration or seek index: walk the file
+        seekable = False
+        n, last_ms = 0, 0.0
+        while cap.grab():
+            n += 1
+            last_ms = cap.get(cv2.CAP_PROP_POS_MSEC) or last_ms
+        fps = n / (last_ms / 1000) if last_ms > 0 else 30
     cap.release()
-    return {"fps": fps, "frames": int(n), "duration": n / fps if fps else 0, "width": w, "height": h}
+    return {"fps": fps, "frames": int(n), "duration": n / fps if fps else 0, "width": w, "height": h, "seekable": seekable}
+
+
+def _best_per_window_sequential(path: Path, dur: float, n: int) -> list[tuple[float, np.ndarray]]:
+    """No seek index: one pass through the file, sharpest of every 3rd frame in each of n windows."""
+    cap = cv2.VideoCapture(str(path))
+    best: dict[int, tuple[float, float, np.ndarray]] = {}
+    i = 0
+    while True:
+        ok = cap.grab()
+        if not ok:
+            break
+        i += 1
+        if i % 3:
+            continue
+        ok, f = cap.retrieve()
+        if not ok:
+            continue
+        t = (cap.get(cv2.CAP_PROP_POS_MSEC) or 0) / 1000
+        k = min(n - 1, int(t / dur * n)) if dur > 0 else 0
+        s = _sharp(f)
+        if k not in best or s > best[k][1]:
+            best[k] = (t, s, f)
+    cap.release()
+    return [(best[k][0], best[k][2]) for k in sorted(best)]
 
 
 def _sharp(img: np.ndarray) -> float:
@@ -70,19 +103,24 @@ def key_frames(path: Path, n: int = N_FRAMES) -> tuple[list[tuple[float, bytes]]
     detector = cv2.FaceDetectorYN.create(str(YUNET), "", (320, 320), 0.6) if YUNET.exists() else None
     out: list[tuple[float, bytes]] = []
     faces = 0
-    for k in range(n):
-        a, b = dur * k / n, dur * (k + 1) / n
-        best, best_t, best_s = None, a, -1.0
-        for t in np.linspace(a + 0.05, max(a + 0.05, b - 0.05), 5):  # 5 candidates per window
-            cap.set(cv2.CAP_PROP_POS_MSEC, float(t) * 1000)
-            ok, f = cap.read()
-            if not ok:
-                continue
-            s = _sharp(f)
-            if s > best_s:
-                best, best_t, best_s = f, float(t), s
-        if best is None:
-            continue
+    picks: list[tuple[float, np.ndarray]] = []
+    if info["seekable"]:
+        for k in range(n):
+            a, b = dur * k / n, dur * (k + 1) / n
+            best, best_t, best_s = None, a, -1.0
+            for t in np.linspace(a + 0.05, max(a + 0.05, b - 0.05), 5):  # 5 candidates per window
+                cap.set(cv2.CAP_PROP_POS_MSEC, float(t) * 1000)
+                ok, f = cap.read()
+                if not ok:
+                    continue
+                s = _sharp(f)
+                if s > best_s:
+                    best, best_t, best_s = f, float(t), s
+            if best is not None:
+                picks.append((best_t, best))
+    else:
+        picks = _best_per_window_sequential(path, dur, n)
+    for best_t, best in picks:
         img = cv2.resize(best, (FRAME_W, int(FRAME_W * best.shape[0] / best.shape[1])), interpolation=cv2.INTER_AREA)
         img, nf = blur_faces(img, detector)
         faces += nf

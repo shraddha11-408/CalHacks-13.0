@@ -4,14 +4,8 @@ import { Panel, TierBadge } from '../components/ui'
 import { fmtLatency } from '../format'
 import { api, type Task, type VideoAnalysis, type VideoJob } from '../lib/api'
 import { apiUrl } from '../lib/audio'
+import { STAGES } from '../lib/stages'
 
-const STAGES: { key: VideoJob['stage']; label: string }[] = [
-  { key: 'transcribing', label: 'Listening to the audio (Cartesia)' },
-  { key: 'key_frames', label: 'Picking key frames, blurring faces' },
-  { key: 'claude', label: 'Claude is breaking it into steps' },
-  { key: 'saving', label: 'Saving the tasks' },
-  { key: 'recording_voice', label: 'Recording the voice (Cartesia)' },
-]
 
 const mmss = (s: number) => `${Math.floor(s / 60)}:${String(Math.floor(s % 60)).padStart(2, '0')}`
 

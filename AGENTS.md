@@ -18,6 +18,13 @@ This file is the source of truth for anyone (human or agent) writing code in thi
 >   rectification and cvlib checkers are not on the MVP path (code stays for later).
 > - **Checking:** Bitdeer vision model per snapshot → Claude with the last 3 frames when unclear or
 >   low confidence twice. No Droid-compiled tier in the MVP.
+>   **Temporary (2026-10-24):** Bitdeer is paused in the live check (p50 ~4–8 s was too slow to follow
+>   a worker). The Steps page streams continuously (a frame every 0.6 s, 2 checks in flight, no waiting
+>   for a hand pause). `edge/stepwise_edge/live_vision.py`: Claude Haiku watches the stream; Claude
+>   Sonnet takes the confirming second look, so a step advances (or is corrected) only when it agrees.
+>   Each call sees the whole step list and returns status, `done_through` and the mistake box. Automatic
+>   checks never escalate to Opus. Gemini is wired (`live_vision: auto`) but our key hits its free quota.
+>   The Bitdeer call is commented out in `api.run_check`; numbers in `eval/results/live_fast.json`.
 > - **Database:** SpacetimeDB replaces Convex (no Convex key). Photos live on the edge laptop; rows hold their paths.
 > - **Talk:** Nemotron Omni is not in our Bitdeer catalog → Cartesia STT → intent → answer → Cartesia TTS.
 > - **Memory:** Moss holds plain-language notes about each worker (mistakes, preferences), queried before each step.

@@ -51,7 +51,7 @@ export interface VideoJob {
 }
 
 export interface PublicConfig {
-  coach: TriggerConfig & { live_interval_s: number; mark_with: 'claude' | 'bitdeer'; low_confidence: number; snapshot_px: number; keyframe_min_gap_s: number; keyframes_max: number; check_timeout_s: number }
+  coach: TriggerConfig & { live_interval_s: number; live_parallel: number; live_snapshot_px: number; mark_with: 'live' | 'claude' | 'bitdeer'; done_min_gap_s: number; low_confidence: number; snapshot_px: number; keyframe_min_gap_s: number; keyframes_max: number; check_timeout_s: number }
   spacetimedb: { uri: string; db: string; ok: boolean }
   phrases: Record<string, Say>
 }
@@ -76,7 +76,7 @@ export interface StepPayload {
 }
 
 export interface CheckResult {
-  status: 'done' | 'confirming' | 'mistake' | 'in_progress' | 'unclear' | 'unavailable' | 'skipped' | 'finished'
+  status: 'done' | 'confirming' | 'mistake' | 'in_progress' | 'unclear' | 'unavailable' | 'skipped' | 'finished' | 'stale' | 'rate_limited'
   confidence: number
   reason: string
   source: string
@@ -89,6 +89,38 @@ export interface CheckResult {
   /** mistake only: [x, y, w, h] as fractions of the snapshot (= the work area) */
   box?: number[] | null
   fix?: string
+  /** mistake only: saved photo (edge path) when the correction was spoken */
+  photo?: string
+  step_index?: number
+  /** mistake seen again inside the 10 s cooldown: not spoken, not logged as a new mistake */
+  repeat?: boolean
+}
+
+export interface ReportStats {
+  sessions: number
+  mistakes_total: number
+  help_requests: number
+  help: { step: string; status: string; when: string }[]
+  tasks: {
+    task_id: string
+    title: string
+    times_done: number
+    times_finished: number
+    mistakes_total: number
+    mistakes_per_attempt: number[]
+    trend: 'improving' | 'steady' | 'more_mistakes_lately' | 'not_enough_data'
+    hardest_steps: { step: string; mistakes: number }[]
+    attempts: { session_id: string; started_at: string; finished: boolean; steps_done: number; steps_total: number; mistakes: number; minutes: number | null; mistake_notes: { step: string; what: string }[] }[]
+  }[]
+}
+
+export interface WorkerReport {
+  worker: string
+  stats: ReportStats
+  notes: string[]
+  report: { summary: string; strengths: string[]; needs_support: string[]; improvement: string; recommendations: string[]; for_worker: string } | null
+  latency_ms: number
+  generated_at: number
 }
 
 export interface TalkResult {
@@ -148,6 +180,7 @@ export const api = {
     return fetch('/api/videos/upload', { method: 'POST', body: f }).then(j<VideoJob>)
   },
   videoJob: (id: string) => fetch(`/api/videos/jobs/${id}`).then(j<VideoJob>),
+  report: (body: { worker_name: string; sessions: unknown[]; events: unknown[]; help: unknown[] }) => post<WorkerReport>('/report', body),
   memory: (worker: string) => fetch(`/api/memory/${encodeURIComponent(worker)}`).then(j<{ worker_id: string; notes: Memory[]; error: string | null }>),
   addMemory: (worker: string, text: string) => post<{ ok: boolean }>(`/memory/${encodeURIComponent(worker)}`, { text }),
 }

@@ -1,4 +1,4 @@
-/* Stepwise design tokens. Calm, warm, trustworthy.
+/* IDD Help design tokens. Minimal: neutral surfaces, one indigo accent.
    Every text/background pair here is checked for WCAG AA (scripts/check_contrast.mjs).
    Red is only for help/urgent. A worker's mistake is amber ("almost"), never red. */
 
@@ -9,66 +9,76 @@
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* Surfaces & ink */
-  --bg: #faf6ef;
+  --bg: #f7f7f5;
   --surface: #ffffff;
-  --surface-2: #f3ede3;
-  --ink: #1f2a2e;
-  --ink-2: #4a5558;
-  --line: #ddd4c6;
-  --focus: #0f5e5c;
+  --surface-2: #f0f0ed;
+  --ink: #18181b;
+  --ink-2: #5b5b63;
+  --line: #e4e4e0;
+  --focus: #3f4bd1;
 
-  /* Primary: deep teal */
-  --primary: #0f5e5c;
-  --primary-hover: #0b4a48;
+  /* Primary: one calm indigo accent, everything else neutral */
+  --primary: #3f4bd1;
+  --primary-hover: #323cb0;
   --on-primary: #ffffff;
-  --primary-soft: #dcefed;
-  --primary-soft-ink: #0b4a48;
+  --primary-soft: #eceefc;
+  --primary-soft-ink: #2c3596;
 
   /* States */
-  --success: #1c6e38;
-  --success-bg: #e2f1e6;
-  --almost: #7a4f00;
-  --almost-bg: #fcefd3;
-  --almost-fill: #e0a030;
-  --urgent: #a8231b;
-  --urgent-bg: #fbe6e4;
+  --success: #1f7a4a;
+  --success-bg: #e7f4ec;
+  --almost: #8a5300;
+  --almost-bg: #fdf1dc;
+  --almost-fill: #e8a33d;
+  --urgent: #b42318;
+  --urgent-bg: #fdecea;
   --on-urgent: #ffffff;
-  --urgent-fill: #b3261e;
-  --idle: #6b7477;
+  --urgent-fill: #c4321f;
+  --idle: #85858d;
 
   /* Tier badges (text on soft bg) */
-  --tier-checker: #1c6e38;
-  --tier-checker-bg: #e2f1e6;
-  --tier-bitdeer: #1d55a0;
-  --tier-bitdeer-bg: #e4eefa;
-  --tier-claude: #6a3a9c;
-  --tier-claude-bg: #efe7f8;
-  --tier-moss: #0c6360;
-  --tier-moss-bg: #dcf0ee;
+  --tier-checker: #1f7a4a;
+  --tier-checker-bg: #e7f4ec;
+  --tier-bitdeer: #3f4bd1;
+  --tier-bitdeer-bg: #eceefc;
+  --tier-claude: #6b4fbb;
+  --tier-claude-bg: #f1edfb;
+  --tier-moss: #136f63;
+  --tier-moss-bg: #e3f3f0;
 
-  /* Tier chart fills (validated categorical palette, light) */
-  --chart-checker: #2e8540;
-  --chart-bitdeer: #4a86e0;
-  --chart-claude: #a0429a;
-  --chart-moss: #00968f;
-  --chart-grid: #e8e1d5;
+  /* Chart fills */
+  --chart-checker: #2e8a57;
+  --chart-bitdeer: #5a66e0;
+  --chart-claude: #9a5cc8;
+  --chart-moss: #1a9a8a;
+  --chart-grid: #ebebe7;
 
   /* Simulated ribbon */
-  --sim-bg: #3d3a35;
+  --sim-bg: #2a2a2e;
   --sim-ink: #fff4d6;
 
+  /* Home animation figure (decorative, not text) */
+  --fig-skin: #e3b48f;
+  --fig-hair: #3b302b;
+  --fig-shirt: #3f4bd1;
+  --fig-pants: #3a3a42;
+  --fig-table: #d9d6cf;
+  --fig-cup: #ffffff;
+  --fig-sleeve: #b07a4a;
+  --fig-lens: #9fd3ff;
+
   /* Tray illustration */
-  --tray: #e9dfcf;
-  --tray-edge: #c9bba5;
-  --slot: #f7f1e7;
+  --tray: #e9e6df;
+  --tray-edge: #cfcac0;
+  --slot: #f7f6f2;
   --item-soap: #2f6fcc;
   --item-shampoo: #2e8540;
   --item-lotion: #f2c230;
   --item-cloth: #ffffff;
 
-  --radius: 14px;
-  --radius-sm: 8px;
-  --shadow: 0 1px 2px rgba(31, 42, 46, 0.06), 0 4px 16px rgba(31, 42, 46, 0.06);
+  --radius: 16px;
+  --radius-sm: 10px;
+  --shadow: 0 1px 2px rgba(24, 24, 27, 0.04), 0 8px 24px rgba(24, 24, 27, 0.05);
   --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
   --dur: 240ms;
 }
@@ -76,93 +86,109 @@
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme='light']) {
     color-scheme: dark;
-    --bg: #141a1c;
-    --surface: #1c2427;
-    --surface-2: #232d31;
-    --ink: #eee9e1;
-    --ink-2: #b8b2a8;
-    --line: #34403f;
-    --focus: #5cc2bc;
-    --primary: #5cc2bc;
-    --primary-hover: #7fd3ce;
-    --on-primary: #062a29;
-    --primary-soft: #16383a;
-    --primary-soft-ink: #a6e3df;
-    --success: #7fd69a;
-    --success-bg: #173322;
-    --almost: #f3c06a;
-    --almost-bg: #3a2c12;
-    --almost-fill: #e0a030;
-    --urgent: #f4a19a;
-    --urgent-bg: #3d1a18;
+    --bg: #111113;
+    --surface: #19191c;
+    --surface-2: #222226;
+    --ink: #f2f2f0;
+    --ink-2: #a8a8b0;
+    --line: #2e2e33;
+    --focus: #9aa3ff;
+    --primary: #9aa3ff;
+    --primary-hover: #b4bbff;
+    --on-primary: #14163a;
+    --primary-soft: #23264a;
+    --primary-soft-ink: #c7ccff;
+    --success: #7ad3a0;
+    --success-bg: #15301f;
+    --almost: #f2c274;
+    --almost-bg: #38290f;
+    --almost-fill: #e8a33d;
+    --urgent: #f6a29a;
+    --urgent-bg: #3a1714;
     --on-urgent: #2a0b09;
     --urgent-fill: #f28b82;
-    --idle: #8d9699;
-    --tier-checker: #7fd69a;
-    --tier-checker-bg: #173322;
-    --tier-bitdeer: #9cc2f5;
-    --tier-bitdeer-bg: #172a45;
-    --tier-claude: #d2b2f2;
-    --tier-claude-bg: #2d1f42;
-    --tier-moss: #7fd8d1;
-    --tier-moss-bg: #123533;
-    --chart-checker: #4aa35b;
-    --chart-bitdeer: #5a8fe0;
-    --chart-claude: #b95ab0;
-    --chart-moss: #1fa89f;
-    --chart-grid: #2b3639;
+    --idle: #85858d;
+    --tier-checker: #7ad3a0;
+    --tier-checker-bg: #15301f;
+    --tier-bitdeer: #b4bbff;
+    --tier-bitdeer-bg: #23264a;
+    --tier-claude: #d2b8f5;
+    --tier-claude-bg: #2c2142;
+    --tier-moss: #7fd8cb;
+    --tier-moss-bg: #123430;
+    --chart-checker: #4aa36b;
+    --chart-bitdeer: #7680ea;
+    --chart-claude: #b07ad8;
+    --chart-moss: #2ab3a1;
+    --chart-grid: #26262b;
     --sim-bg: #f3e3b8;
     --sim-ink: #2b2410;
-    --tray: #3a342b;
-    --tray-edge: #574e40;
-    --slot: #2a2620;
+    --fig-skin: #d9a77f;
+    --fig-hair: #1f1916;
+    --fig-shirt: #9aa3ff;
+    --fig-pants: #4a4a55;
+    --fig-table: #33333a;
+    --fig-cup: #f2f2f0;
+    --fig-sleeve: #c08a58;
+    --fig-lens: #9fd3ff;
+    --tray: #2c2b28;
+    --tray-edge: #46443f;
+    --slot: #232220;
     --item-cloth: #f4f1ea;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
   }
 }
 
 :root[data-theme='dark'] {
   color-scheme: dark;
-  --bg: #141a1c;
-  --surface: #1c2427;
-  --surface-2: #232d31;
-  --ink: #eee9e1;
-  --ink-2: #b8b2a8;
-  --line: #34403f;
-  --focus: #5cc2bc;
-  --primary: #5cc2bc;
-  --primary-hover: #7fd3ce;
-  --on-primary: #062a29;
-  --primary-soft: #16383a;
-  --primary-soft-ink: #a6e3df;
-  --success: #7fd69a;
-  --success-bg: #173322;
-  --almost: #f3c06a;
-  --almost-bg: #3a2c12;
-  --almost-fill: #e0a030;
-  --urgent: #f4a19a;
-  --urgent-bg: #3d1a18;
+  --bg: #111113;
+  --surface: #19191c;
+  --surface-2: #222226;
+  --ink: #f2f2f0;
+  --ink-2: #a8a8b0;
+  --line: #2e2e33;
+  --focus: #9aa3ff;
+  --primary: #9aa3ff;
+  --primary-hover: #b4bbff;
+  --on-primary: #14163a;
+  --primary-soft: #23264a;
+  --primary-soft-ink: #c7ccff;
+  --success: #7ad3a0;
+  --success-bg: #15301f;
+  --almost: #f2c274;
+  --almost-bg: #38290f;
+  --almost-fill: #e8a33d;
+  --urgent: #f6a29a;
+  --urgent-bg: #3a1714;
   --on-urgent: #2a0b09;
   --urgent-fill: #f28b82;
-  --idle: #8d9699;
-  --tier-checker: #7fd69a;
-  --tier-checker-bg: #173322;
-  --tier-bitdeer: #9cc2f5;
-  --tier-bitdeer-bg: #172a45;
-  --tier-claude: #d2b2f2;
-  --tier-claude-bg: #2d1f42;
-  --tier-moss: #7fd8d1;
-  --tier-moss-bg: #123533;
-  --chart-checker: #4aa35b;
-  --chart-bitdeer: #5a8fe0;
-  --chart-claude: #b95ab0;
-  --chart-moss: #1fa89f;
-  --chart-grid: #2b3639;
+  --idle: #85858d;
+  --tier-checker: #7ad3a0;
+  --tier-checker-bg: #15301f;
+  --tier-bitdeer: #b4bbff;
+  --tier-bitdeer-bg: #23264a;
+  --tier-claude: #d2b8f5;
+  --tier-claude-bg: #2c2142;
+  --tier-moss: #7fd8cb;
+  --tier-moss-bg: #123430;
+  --chart-checker: #4aa36b;
+  --chart-bitdeer: #7680ea;
+  --chart-claude: #b07ad8;
+  --chart-moss: #2ab3a1;
+  --chart-grid: #26262b;
   --sim-bg: #f3e3b8;
   --sim-ink: #2b2410;
-  --tray: #3a342b;
-  --tray-edge: #574e40;
-  --slot: #2a2620;
+  --fig-skin: #d9a77f;
+  --fig-hair: #1f1916;
+  --fig-shirt: #9aa3ff;
+  --fig-pants: #4a4a55;
+  --fig-table: #33333a;
+  --fig-cup: #f2f2f0;
+  --fig-sleeve: #c08a58;
+  --fig-lens: #9fd3ff;
+  --tray: #2c2b28;
+  --tray-edge: #46443f;
+  --slot: #232220;
   --item-cloth: #f4f1ea;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 4px 16px rgba(0, 0, 0, 0.25);
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
 }

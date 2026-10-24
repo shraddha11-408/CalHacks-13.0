@@ -9,7 +9,11 @@ TEACH_SYSTEM = """You turn a supervisor's one-time demonstration into a step lis
 The app coaches capable workers with intellectual and developmental disabilities, step by step, using a camera.
 
 You get key frames from the demo, in time order (moments the supervisor's hands paused between steps).
-Write the steps the worker should follow, in order. Usually 4 to 8 steps.
+Write the steps the worker should follow, in order.
+Use as FEW steps as possible: usually 2 to 4. Every step must end in a visible change to the objects that a
+camera can check (picked up, turned, put on, folded). Never make a step that only looks, finds or checks
+something: fold "find the cup" into "pick up the cup", and drop final "check that it is right" steps
+(that check belongs in the step before, as its done_right). "instruction" is one or two short sentences.
 
 Rules for every text field:
 - First-grade reading level. Short, concrete words.
@@ -94,7 +98,11 @@ The app coaches capable workers with intellectual and developmental disabilities
 and a voice. You get key frames from the video (with their times) and the speech-to-text transcript (with times).
 Speech-to-text can mishear words; use the frames to understand what was really meant.
 
-Break the video into tasks (usually one), each with ordered steps the worker should follow. Usually 3 to 8 steps.
+Break the video into tasks (usually one), each with ordered steps the worker should follow.
+Use as FEW steps as possible: usually 2 to 4. Every step must end in a visible change to the objects that a
+camera can check (picked up, turned, put on, folded). Never make a step that only looks, finds or checks
+something: fold "find the cup" into "pick up the cup", and drop final "check that it is right" steps
+(that check belongs in the step before, as its done_right). "instruction" is one or two short sentences.
 If the supervisor demonstrates a wrong way on purpose, do NOT make it a step: use it as that step's common_mistake
 and correction.
 
@@ -197,3 +205,48 @@ Reply with JSON only:
 
 IMAGES_WITH_REF = "Image 1 is only an EXAMPLE of this step done once, somewhere else. Use it to learn what the objects look like.\nImage 2 is the worker now (their work area)."
 IMAGES_NO_REF = "The image is the worker now (their work area)."
+
+# Live check (fast VLM stand-in for Bitdeer): the WHOLE step list, so the model maps what it sees
+# to the right step. Box uses box_2d [ymin, xmin, ymax, xmax] on 0–1000 (Gemini's native format).
+LIVE_PROMPT = """You watch a worker doing a physical task, for a job coach app. The worker is a capable person
+with an intellectual or developmental disability. Look at the worker photo and decide how far along they are.
+
+Task: {task}
+All steps, in order:
+{steps}
+
+The app thinks the worker is on step {n} of {total}: "{instruction}"
+
+{images}
+The worker can be in a different place than the example: different table, background, camera angle, lighting,
+hand, size, brand or color. None of that matters. Only whether each step's goal ("Done when") is met matters.
+
+Answer:
+- "seen": a few words on the key objects and what the hands are doing (write this first).
+- "done_through": the highest step number whose goal is clearly met right now (0 if none).
+  If the worker has clearly moved on to a later step, the steps before it count as met.
+- "status" for step {n}:
+  "done" = its goal is met (also when later steps are done);
+  "mistake" = you can clearly see its common mistake or another clear, fixable error in this step;
+  "in_progress" = not finished yet and nothing is wrong;
+  "unclear" = the objects are hidden or too blurry to judge.
+  Telling someone they made a mistake when they did not is the worst outcome. If unsure, do not say mistake.
+- "confidence": 0 to 1. "reason": under 15 words, plain language.
+- For "mistake" only: "box_2d" = [ymin, xmin, ymax, xmax] around the problem object in the WORKER photo,
+  scaled 0 to 1000; "fix" = one short, kind sentence saying what to do (first-grade reading level, never
+  "wrong" or "no"). Otherwise "box_2d": [] and "fix": ""."""
+
+LIVE_SCHEMA = {
+    "type": "object",
+    "properties": {
+        "seen": {"type": "string"},
+        "done_through": {"type": "integer"},
+        "status": {"type": "string", "enum": STATUS},
+        "confidence": {"type": "number"},
+        "reason": {"type": "string"},
+        "box_2d": {"type": "array", "items": {"type": "integer"}},
+        "fix": {"type": "string"},
+    },
+    "required": ["seen", "done_through", "status", "confidence", "reason", "box_2d", "fix"],
+    "additionalProperties": False,
+}

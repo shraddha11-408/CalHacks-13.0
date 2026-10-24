@@ -17,7 +17,7 @@ from fastapi import APIRouter, File, Form, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
-from . import claude, vision
+from . import claude, live_vision, report, vision
 from .coach import CoachSession, intent_of, spoken_tip
 from .config import ROOT, load_config
 from .memory import Memory, slug
@@ -249,9 +249,14 @@ def log_event(s: CoachSession, kind: str, source: str, trigger: str, conf: float
     stdb().call("log_step_event", s.id, s.worker_id, s.task["task_id"], s.step["id"], kind, source, trigger, float(conf), int(ms), note[:200], photo)
 
 
-async def _advance(s: CoachSession, source: str, trigger: str) -> dict:
+async def _advance(s: CoachSession, source: str, trigger: str, steps: int = 1) -> dict:
+    """Move on `steps` steps (more than 1 when the live check saw the worker already further along)."""
     done_step = s.step
-    finished = s.advance()
+    finished = False
+    for _ in range(max(1, steps)):
+        finished = s.advance()
+        if finished:
+            break
     stdb().call("set_step", s.id, s.step_index)
     if finished:
         stdb().call("end_session", s.id, "done")
@@ -261,21 +266,56 @@ async def _advance(s: CoachSession, source: str, trigger: str) -> dict:
     return {"finished": False, "next": nxt, "say": nxt["say"], "completed_step": done_step["id"]}
 
 
+AUTO_TRIGGERS = {"stream", "pause", "left_area", "timeout", "confirm"}
+
+
+def _stale(trigger: str) -> dict:
+    return {"status": "stale", "confidence": 0, "reason": "step changed while checking", "source": "system", "latency_ms": 0, "escalated": False, "trigger": trigger, "say": []}
+
+
 async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
     s.snapshots.append(jpg)
     st = s.step
+    step_at_start = s.step_index  # the live stream keeps several checks in flight
     ref = store.frame(s.task["task_id"], st.get("reference_photo", "")) if st.get("reference_photo") else None
-    source = "bitdeer"
+    # Bitdeer is paused while we tune the live loop (p50 ~8 s was too slow to follow a worker).
+    # A fast VLM (Gemini Flash, or Claude Haiku) sees the whole step list instead. To switch back,
+    # restore this block and drop the live_vision call below.
+    # source = "bitdeer"
+    # t0 = time.perf_counter()
+    # try:
+    #     result, ms = await run_model(vision.check, M["bitdeer_base_url"], M["bitdeer_vision"], jpg, ref, st, s.task)
+    # except Exception as e:
+    #     log.warning("bitdeer check failed: %s", e)
+    #     result, ms, source = {"status": "unclear", "confidence": 0.0, "reason": f"Bitdeer unavailable ({type(e).__name__})"}, (time.perf_counter() - t0) * 1000, "bitdeer"
+    #     s.unclear = max(s.unclear, COACH["unclear_escalate"] - 1)  # go straight to Claude
+    # Fast model watches the stream; the stricter model (Sonnet) takes the confirming second look,
+    # so a step only advances, or gets a correction, when it agrees.
+    confirm_look = bool(s.done_streak and M.get("claude_confirm"))
+    models = {**M, "live_vision": "claude", "claude_live": M["claude_confirm"]} if confirm_look else M
+    source = "gemini" if live_vision.provider(models["live_vision"]) == "gemini" else "haiku"
     t0 = time.perf_counter()
     try:
-        result, ms = await run_model(vision.check, M["bitdeer_base_url"], M["bitdeer_vision"], jpg, ref, st, s.task)
+        result, ms, source = await run_model(live_vision.check, models, jpg, ref if M.get("live_send_ref", True) else None, st, s.task, timeout=COACH["live_timeout_s"])
     except Exception as e:
-        log.warning("bitdeer check failed: %s", e)
-        result, ms, source = {"status": "unclear", "confidence": 0.0, "reason": f"Bitdeer unavailable ({type(e).__name__})"}, (time.perf_counter() - t0) * 1000, "bitdeer"
+        log.warning("live check failed: %s", str(e)[:200])
+        limited = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or type(e).__name__ == "RateLimitError"
+        result, ms = {"status": "unclear", "confidence": 0.0, "reason": "Rate limited, slowing down" if limited else f"Live check unavailable ({type(e).__name__})"}, (time.perf_counter() - t0) * 1000
+        if limited:
+            return {**_stale(trigger), "status": "rate_limited", "reason": result["reason"], "latency_ms": round(ms)}
         s.unclear = max(s.unclear, COACH["unclear_escalate"] - 1)  # go straight to Claude
+    if s.step_index != step_at_start or s.finished:
+        return _stale(trigger)  # another check already moved the worker on; this answer is about an old step
+    # The live check sees every step: a high "done_through" means the current step is done too.
+    n = s.step_index + 1
+    through = int(result.get("done_through", 0) or 0)
+    if result.get("status") in ("in_progress", "unclear") and through >= n and result.get("confidence", 0) >= COACH["done_confidence"]:
+        result["status"] = "done"
     status = s.classify(result, COACH["low_confidence"], COACH["done_confidence"])
     escalated = False
-    if status == "unclear" and s.note_unclear(COACH["unclear_escalate"]):
+    # Automatic checks never wait on the slow Claude judge: unclear → stay quiet, the next frame decides.
+    # Only an explicit "is this correct?" / Check-now escalates (PLAN.md: unclear twice → Claude).
+    if status == "unclear" and trigger not in AUTO_TRIGGERS and s.note_unclear(COACH["unclear_escalate"]):
         escalated, source = True, "claude"
         try:
             result, ms2 = await run_model(claude.judge, M["claude"], M["claude_effort_judge"], list(s.snapshots), ref, st, timeout=COACH["check_timeout_s"] * 2)
@@ -287,17 +327,36 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
             status = "unavailable"
         s.unclear = 0
     # Debounce "done" (AGENTS.md §6): advance only on the 2nd consecutive done, >= 1 s apart.
-    if status == "done":
+    if status == "done" and s.done_streak and M.get("claude_confirm") and not confirm_look:
+        status = "confirming"  # a fast-model "done" can't be the second look; wait for the confirm model
+    elif status == "done":
+        # how far to jump: the smaller of the two confirming looks, never less than this step
+        s.done_through = min(s.done_through, through) if s.done_streak else through
         if not s.note_done(time.monotonic(), COACH["done_confirm"], COACH["done_min_gap_s"]):
             status = "confirming"
-    else:
+    elif status != "unclear":  # hands in the way says nothing; don't throw away a pending "done"
         s.not_done()
-    photo = save_photo("check", s.id, jpg) if status == "mistake" else ""
-    log_event(s, {"unavailable": "unclear", "confirming": "in_progress"}.get(status, status), source, trigger, result.get("confidence", 0), ms, result.get("reason", ""), photo)
-    box = vision.parse_box(result.get("box")) if status == "mistake" else None
-    out: dict = {"status": status, "confidence": result.get("confidence", 0), "reason": result.get("reason", ""), "source": source, "latency_ms": round(ms), "escalated": escalated, "trigger": trigger, "say": [], "box": box, "fix": (result.get("fix") or st["correction"]) if status == "mistake" else ""}
+    # Debounce corrections (AGENTS.md §6): 2 mistakes in a row, then at most one correction per 10 s.
+    # An explicit "is this correct?" / Check-now always answers.
+    say_it = "speak"
+    if status == "mistake":
+        if trigger in AUTO_TRIGGERS:
+            # the confirm model's mistake is already a second opinion (the fast model thought it was done)
+            need = 1 if confirm_look else CFG["thresholds"]["correct_wrong_count"]
+            say_it = s.note_mistake(time.monotonic(), need, CFG["thresholds"]["correction_cooldown_s"])
+        if say_it == "wait":
+            status = "in_progress"  # one look is not enough to correct someone
+    else:
+        s.not_mistake()
+    photo = save_photo("check", s.id, jpg) if status == "mistake" and say_it == "speak" else ""
+    kind = "mistake_repeat" if status == "mistake" and say_it == "quiet" else {"unavailable": "unclear", "confirming": "in_progress"}.get(status, status)
+    log_event(s, kind, source, trigger, result.get("confidence", 0), ms, result.get("reason", ""), photo)  # "mistake" = one spoken correction
+    box = result.get("box") if status == "mistake" else None  # live_vision returns [x, y, w, h] fractions
+    out: dict = {"status": status, "confidence": result.get("confidence", 0), "reason": result.get("reason", ""), "source": source, "latency_ms": round(ms), "escalated": escalated, "trigger": trigger, "say": [], "box": box, "fix": (result.get("fix") or st["correction"]) if status == "mistake" else "", "photo": photo, "step_index": s.step_index, "repeat": status == "mistake" and say_it == "quiet"}
     if status == "done":
-        out.update(await _advance(s, source, trigger))
+        out.update(await _advance(s, source, trigger, steps=max(1, s.done_through - s.step_index)))
+    elif status == "mistake" and say_it == "quiet":
+        pass  # already corrected moments ago: keep the mark on screen, don't nag
     elif status == "mistake":
         out["say"] = [say(st["correction"])]
         meta = {"kind": "mistake", "task_id": s.task["task_id"], "task": s.task["title"], "step_id": st["id"], "tip": st["correction"]}
@@ -462,6 +521,35 @@ async def memory_add(worker: str, req: NoteReq) -> dict:
 async def memory_recall(worker: str, q: str) -> dict:
     mems, ms = await memory.recall(slug(worker), q)
     return {"memory": mems, "latency_ms": round(ms, 2)}
+
+
+# ---------- worker report (supervisor) ----------
+class ReportReq(BaseModel):
+    worker_name: str
+    sessions: list[dict]  # this worker's SpacetimeDB rows, sent by the supervisor page
+    events: list[dict]
+    help: list[dict] = []
+
+
+@router.post("/report")
+async def worker_report(req: ReportReq) -> dict:
+    st = report.stats(req.sessions, req.events, req.help)
+    notes = []
+    try:
+        notes = [n["text"] for n in await memory.all(slug(req.worker_name))][:15]
+    except Exception as e:
+        log.warning("report: memory unavailable: %s", e)
+    words, ms = None, 0.0
+    if st["sessions"]:
+        payload = {"worker": req.worker_name, "measured": st, "coach_notes_from_memory": notes}
+        try:
+            words, ms = await run_model(
+                claude._call, M["claude"], "medium", report.REPORT_SYSTEM,
+                [{"type": "text", "text": json.dumps(payload, default=str)[:60000]}], report.REPORT_SCHEMA, 8000, timeout=90,
+            )
+        except Exception as e:
+            log.warning("report: claude failed: %s", e)
+    return {"worker": req.worker_name, "stats": st, "notes": notes, "report": words, "latency_ms": round(ms), "generated_at": time.time()}
 
 
 def mount_files(app) -> None:

@@ -2,7 +2,7 @@
 // SpacetimeDB row types come from module_bindings.
 
 /** Who decided / answered. */
-export type Tier = 'bitdeer' | 'claude' | 'moss' | 'cartesia' | 'instant' | 'button' | 'system' | 'checker' | 'static'
+export type Tier = 'bitdeer' | 'gemini' | 'haiku' | 'sonnet' | 'claude' | 'moss' | 'cartesia' | 'instant' | 'button' | 'system' | 'checker' | 'static'
 export type VerdictStatus = 'done' | 'confirming' | 'finished' | 'mistake' | 'in_progress' | 'unclear' | 'skipped' | 'help' | 'unavailable'
 export type SupportLevel = 0 | 1 | 2 | 3
 export type HealthState = 'ok' | 'degraded' | 'down' | 'off'

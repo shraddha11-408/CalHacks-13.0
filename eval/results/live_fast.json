@@ -1,0 +1,408 @@
+{
+  "ran_at": "2026-10-24 09:46:42",
+  "n_cases": 30,
+  "report": [
+    {
+      "config": "claude (claude-sonnet-5-5, low)",
+      "accuracy": 0.7333333333333333,
+      "done_recognized": 0.75,
+      "mistakes_caught": 0.4444444444444444,
+      "false_corrections": 0.06666666666666667,
+      "p50_ms": 2179,
+      "p90_ms": 2928,
+      "errors": 0,
+      "rows": [
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "through": 0,
+          "conf": 0.9,
+          "reason": "Cup is still on the table; worker has not picked it up yet.",
+          "box": null,
+          "ms": 2831
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "through": 0,
+          "conf": 0.9,
+          "reason": "Cup is still on the table; no hand has picked it up yet.",
+          "box": null,
+          "ms": 2603
+        },
+        {
+          "t": 2.0,
+          "step": 0,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "through": 0,
+          "conf": 0.9,
+          "reason": "Cup is still on the table; nobody has picked it up yet.",
+          "box": null,
+          "ms": 3073
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "through": 1,
+          "conf": 0.9,
+          "reason": "Paper cup with lid is held in hand; can left behind.",
+          "box": null,
+          "ms": 2833
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "through": 1,
+          "conf": 0.9,
+          "reason": "Lidded paper cup is held in hand; sleeve is in other hand.",
+          "box": null,
+          "ms": 1841
+        },
+        {
+          "t": 9.0,
+          "step": 0,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "through": 1,
+          "conf": 0.9,
+          "reason": "Paper cup with lid is held in hand; no cans nearby.",
+          "box": null,
+          "ms": 3196
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "original",
+          "got": "in_progress",
+          "through": 1,
+          "conf": 0.7,
+          "reason": "Sleeve is in hand but words are tilted, not clearly upright yet.",
+          "box": null,
+          "ms": 2388
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "through": 2,
+          "conf": 0.8,
+          "reason": "Sleeve is in hand and its words read upright; cup is held.",
+          "box": null,
+          "ms": 2030
+        },
+        {
+          "t": 11.7,
+          "step": 1,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "through": 1,
+          "conf": 0.7,
+          "reason": "Sleeve words look upside down in the hand.",
+          "box": [
+            0.59,
+            0.32,
+            0.24,
+            0.4
+          ],
+          "ms": 1960
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "in_progress",
+          "through": 1,
+          "conf": 0.6,
+          "reason": "Sleeve is in hand but its words are not clearly upright yet.",
+          "box": null,
+          "ms": 2928
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "through": 1,
+          "conf": 0.6,
+          "reason": "Sleeve is in hand but not yet clearly upright or on the cup.",
+          "box": null,
+          "ms": 2382
+        },
+        {
+          "t": 21.0,
+          "step": 1,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "through": 1,
+          "conf": 0.6,
+          "reason": "Sleeve is in hand but its text orientation is tilted, not clearly upright yet.",
+          "box": null,
+          "ms": 2128
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "through": 2,
+          "conf": 0.85,
+          "reason": "Sleeve is in hand next to the cup, not yet slid onto it.",
+          "box": null,
+          "ms": 2120
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "through": 2,
+          "conf": 0.85,
+          "reason": "Sleeve is held next to the cup, not wrapped around it yet.",
+          "box": null,
+          "ms": 2477
+        },
+        {
+          "t": 13.3,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "through": 2,
+          "conf": 0.85,
+          "reason": "Sleeve is still in the other hand, not yet slid onto the cup.",
+          "box": null,
+          "ms": 1974
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "through": 3,
+          "conf": 0.9,
+          "reason": "Sleeve is snug around the cup's middle with words upright.",
+          "box": null,
+          "ms": 1930
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "through": 3,
+          "conf": 0.8,
+          "reason": "Sleeve is snug around the cup's middle with words upright, staying on.",
+          "box": null,
+          "ms": 1702
+        },
+        {
+          "t": 17.25,
+          "step": 2,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "done",
+          "through": 3,
+          "conf": 0.8,
+          "reason": "Sleeve is snug around the cup's middle; the image looks mirrored, so the text direction is not a problem.",
+          "box": null,
+          "ms": 2326
+        },
+        {
+          "t": 18.0,
+          "step": 2,
+          "truth": "done",
+          "variant": "original",
+          "got": "done",
+          "through": 3,
+          "conf": 0.88,
+          "reason": "Sleeve is snug around the cup middle and the words are upright.",
+          "box": null,
+          "ms": 2253
+        },
+        {
+          "t": 18.0,
+          "step": 2,
+          "truth": "done",
+          "variant": "rotated_recolored",
+          "got": "done",
+          "through": 3,
+          "conf": 0.9,
+          "reason": "Sleeve is snug around the cup's middle and its words are upright.",
+          "box": null,
+          "ms": 2167
+        },
+        {
+          "t": 18.0,
+          "step": 2,
+          "truth": "done",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "through": 2,
+          "conf": 0.8,
+          "reason": "Sleeve is on the cup but its words appear upside down.",
+          "box": [
+            0.36,
+            0.155,
+            0.15,
+            0.115
+          ],
+          "ms": 2276
+        },
+        {
+          "t": 22.5,
+          "step": 2,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "through": 2,
+          "conf": 0.7,
+          "reason": "Sleeve is at cup bottom and its words look upside down.",
+          "box": [
+            0.435,
+            0.57,
+            0.165,
+            0.24
+          ],
+          "ms": 2216
+        },
+        {
+          "t": 22.5,
+          "step": 2,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "unclear",
+          "through": 3,
+          "conf": 0.7,
+          "reason": "Sleeve is on lower cup; text looks sideways-upright, not clearly upside down.",
+          "box": null,
+          "ms": 2030
+        },
+        {
+          "t": 22.5,
+          "step": 2,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "through": 2,
+          "conf": 0.7,
+          "reason": "Sleeve is at the cup bottom, not yet slid up to the middle.",
+          "box": null,
+          "ms": 2031
+        },
+        {
+          "t": 24.0,
+          "step": 2,
+          "truth": "mistake",
+          "variant": "original",
+          "got": "mistake",
+          "through": 2,
+          "conf": 0.8,
+          "reason": "Sleeve is on the cup but the words are upside down.",
+          "box": [
+            0.32,
+            0.42,
+            0.12,
+            0.31
+          ],
+          "ms": 2273
+        },
+        {
+          "t": 24.0,
+          "step": 2,
+          "truth": "mistake",
+          "variant": "rotated_recolored",
+          "got": "mistake",
+          "through": 2,
+          "conf": 0.8,
+          "reason": "Sleeve is on the cup but its words are upside down.",
+          "box": [
+            0.415,
+            0.42,
+            0.185,
+            0.31
+          ],
+          "ms": 2155
+        },
+        {
+          "t": 24.0,
+          "step": 2,
+          "truth": "mistake",
+          "variant": "zoomed_mirrored",
+          "got": "mistake",
+          "through": 2,
+          "conf": 0.7,
+          "reason": "Sleeve is on the cup but its words are upside down.",
+          "box": [
+            0.445,
+            0.33,
+            0.195,
+            0.23
+          ],
+          "ms": 2154
+        },
+        {
+          "t": 5.0,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "original",
+          "got": "in_progress",
+          "through": 0,
+          "conf": 0.9,
+          "reason": "Sleeve is still on the table, not on the cup; nobody is holding anything.",
+          "box": null,
+          "ms": 2046
+        },
+        {
+          "t": 5.0,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "rotated_recolored",
+          "got": "in_progress",
+          "through": 0,
+          "conf": 0.9,
+          "reason": "Sleeve is on table, not on the cup yet. No hands in view.",
+          "box": null,
+          "ms": 1837
+        },
+        {
+          "t": 5.0,
+          "step": 2,
+          "truth": "in_progress",
+          "variant": "zoomed_mirrored",
+          "got": "in_progress",
+          "through": 0,
+          "conf": 0.9,
+          "reason": "Sleeve is still on the table, separate from the cup. No one is holding anything.",
+          "box": null,
+          "ms": 2179
+        }
+      ]
+    }
+  ]
+}

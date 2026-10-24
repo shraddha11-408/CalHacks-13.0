@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { asTier } from '../format'
 import { api, type CheckResult, type PublicConfig, type StepPayload } from '../lib/api'
 import type { Say } from '../lib/audio'
@@ -6,6 +6,14 @@ import { TriggerEngine, type Area, type TriggerState } from '../lib/triggers'
 import { grab, snapshot, type FrameRing } from '../lib/vision'
 import { CameraStage, type FrameInfo } from './CameraStage'
 import { TierBadge, VerdictPill } from './ui'
+
+export interface LoggedMistake {
+  stepIndex: number
+  what: string
+  fix: string
+  photo: string | null
+  at: number
+}
 
 export interface Mark {
   /** [x, y, w, h] in video fractions, or null while the pointer is still looking */
@@ -50,11 +58,13 @@ export function MistakeMark({ mark }: { mark: Mark | null }) {
   )
 }
 
-const PHASE = { no_hands: 'No hands', moving: 'Hands moving', still: 'Hands still', busy: 'Bitdeer is checking…' } as const
+const PHASE = { no_hands: 'No hands', moving: 'Hands moving', still: 'Hands still', busy: 'Hands' } as const
 
 /**
- * Live camera check for the worker Steps page. Bitdeer checks a face-blurred snapshot of the
- * work area when the hands pause, leave the work area, or every live_interval_s seconds.
+ * Live camera check for the worker Steps page. Continuous: a face-blurred frame of the work area
+ * goes to a fast vision model (Claude Sonnet, or Gemini Flash; Bitdeer is paused) every
+ * live_interval_s, with up to live_parallel checks in flight, so nobody waits for a pause.
+ * The model sees the whole step list; answers about a step that already changed are dropped.
  * A mistake is spoken right away (pre-recorded correction) and marked on the video.
  */
 export function LiveCheck({
@@ -63,59 +73,80 @@ export function LiveCheck({
   onSay,
   onStep,
   onFinished,
+  onMistake,
+  videoRef,
 }: {
   cfg: PublicConfig
   sessionId: string
   onSay: (s: Say[]) => void
   onStep: (p: StepPayload) => void
   onFinished: () => void
+  /** one call per spoken correction (repeats inside the 10 s cooldown are not reported) */
+  onMistake?: (m: LoggedMistake) => void
+  /** shares the camera <video> with the parent (e.g. for a help photo) */
+  videoRef?: MutableRefObject<HTMLVideoElement | null>
 }) {
   const ring = useRef<FrameRing | null>(null)
-  const video = useRef<HTMLVideoElement | null>(null)
+  const ownVideo = useRef<HTMLVideoElement | null>(null)
+  const video = videoRef ?? ownVideo
   const engine = useRef<TriggerEngine | null>(null)
-  const busy = useRef(false)
+  const inflight = useRef(0)
+  const lastStart = useRef(0)
+  const backoffUntil = useRef(0)
+  const seq = useRef(0)
+  const applied = useRef(0) // newest check whose answer is shown (answers can arrive out of order)
   const [trig, setTrig] = useState<TriggerState | null>(null)
   const [last, setLast] = useState<CheckResult | null>(null)
   const [mark, setMark] = useState<Mark | null>(null)
   const [flash, setFlash] = useState(0)
   const [err, setErr] = useState<string | null>(null)
-  const [recheck, setRecheck] = useState(0) // bumps → a second look ~1 s after a first "done"
 
   useEffect(() => {
-    engine.current = new TriggerEngine({ ...cfg.coach, timeout_s: cfg.coach.live_interval_s }, performance.now() / 1000)
+    // the engine only reads the hands now (pause = check right away); the stream itself never waits for a pause
+    engine.current = new TriggerEngine({ ...cfg.coach, timeout_s: 1e9 }, performance.now() / 1000)
   }, [cfg])
 
   const check = useCallback(
     async (trigger: string) => {
-      if (busy.current) return
-      busy.current = true
-      if (engine.current) engine.current.busy = true
-      setFlash((n) => n + 1)
+      const explicit = trigger === 'button'
+      if (!explicit && inflight.current >= cfg.coach.live_parallel) return
+      inflight.current += 1
+      lastStart.current = performance.now() / 1000
+      const my = ++seq.current
+      if (explicit) setFlash((n) => n + 1)
       try {
         const area = readArea()
-        const f = ring.current?.sharpest(performance.now() / 1000, 1.0)
+        const f = ring.current?.sharpest(performance.now() / 1000, 0.25) // freshest sharp frame, not an old one
         const src = f?.canvas ?? (video.current ? grab(video.current) : null)
         if (!src) throw new Error('no camera frame')
-        const { jpeg } = await snapshot(src, area, cfg.coach.snapshot_px)
+        const { jpeg } = await snapshot(src, area, cfg.coach.live_snapshot_px)
         const r = await api.check(sessionId, jpeg, trigger)
-        setLast(r)
-        setErr(null)
+        if (r.status === 'stale') return // the step moved on while this one was in flight
+        if (r.status === 'rate_limited') {
+          backoffUntil.current = performance.now() / 1000 + 3
+          setErr('The vision model asked us to slow down. Checking a bit less often…')
+          return
+        }
+        const older = my < applied.current
+        if (!older) {
+          applied.current = my
+          setLast(r)
+          setErr(null)
+        }
         if (r.status === 'mistake') {
-          onSay(r.say) // voice first: never wait for the mark
+          if (r.say?.length) onSay(r.say) // voice first: never wait for the mark (empty while in the 10 s cooldown)
           const wrong = r.reason || 'Something needs fixing.'
           const fix = r.fix || r.say[0]?.text || ''
-          const bitdeerBox = cfg.coach.mark_with === 'bitdeer' && r.box ? toVideoBox(r.box, area) : null
+          if (!r.repeat) onMistake?.({ stepIndex: r.step_index ?? 0, what: wrong, fix, photo: r.photo || null, at: Date.now() })
+          const liveBox = cfg.coach.mark_with !== 'claude' && r.box ? toVideoBox(r.box, area) : null // box came with the check
           const at = Date.now()
-          setMark({ box: bitdeerBox, wrong, fix, at })
-          if (!bitdeerBox) {
+          setMark({ box: liveBox, wrong, fix, at })
+          if (!liveBox && cfg.coach.mark_with === 'claude') {
             api
               .locate(sessionId, jpeg, wrong)
               .then((l) => setMark((m) => (m && m.at === at ? { ...m, box: l.box ? toVideoBox(l.box, area) : null, fix: m.fix || l.fix } : m)))
               .catch(() => {})
           }
-        } else if (r.status === 'confirming') {
-          // first "done": take a second look in ~1 s before moving on (debounce)
-          setRecheck((n) => n + 1)
         } else if (r.status === 'finished') {
           setMark(null)
           onFinished()
@@ -124,31 +155,21 @@ export function LiveCheck({
           if (r.say?.length) onSay(r.say)
           if (r.finished) onFinished()
           else if (r.next) onStep(r.next)
-        } else if (r.status === 'in_progress') {
-          // keep a mark up until the worker has had time to fix it, then clear
-          setMark((m) => (m && Date.now() - m.at > 6000 ? null : m))
+        } else if (r.status === 'in_progress' || r.status === 'confirming') {
+          // "confirming": the next streamed frame is the second look. Keep a mark up a few seconds, then clear.
+          if (!older) setMark((m) => (m && Date.now() - m.at > 4000 ? null : m))
         } else if (r.say?.length) {
           onSay(r.say)
         }
       } catch (e) {
         setErr(`Check failed: ${(e as Error).message}`)
+        backoffUntil.current = performance.now() / 1000 + 1
       } finally {
-        busy.current = false
-        if (engine.current) {
-          engine.current.busy = false
-          engine.current.markChecked(performance.now() / 1000)
-        }
+        inflight.current -= 1
       }
     },
-    [cfg, sessionId, onSay, onStep, onFinished],
+    [cfg, sessionId, onSay, onStep, onFinished, onMistake, video],
   )
-
-  // second look after a first "done" (debounce): state-driven so the latest `check` runs
-  useEffect(() => {
-    if (!recheck) return
-    const t = window.setTimeout(() => void check('confirm'), 1200)
-    return () => window.clearTimeout(t)
-  }, [recheck, check])
 
   const onFrame = useCallback(
     ({ hands, t, area }: FrameInfo) => {
@@ -156,9 +177,12 @@ export function LiveCheck({
       if (!e) return
       const s = e.update(hands, t, area)
       setTrig(s)
-      if (s.trigger) void check(s.trigger)
+      const now = performance.now() / 1000
+      if (now < backoffUntil.current) return
+      // continuous: a new check every live_interval_s (≤ live_parallel in flight); a hand pause checks at once
+      if (s.trigger || now - lastStart.current >= cfg.coach.live_interval_s) void check(s.trigger ?? 'stream')
     },
-    [check],
+    [check, cfg],
   )
 
   return (
@@ -190,7 +214,7 @@ export function LiveCheck({
             <span className="muted">{last.reason}</span>
           </>
         ) : (
-          <span className="muted">Bitdeer checks when your hands pause, and every {cfg.coach.live_interval_s} seconds.</span>
+          <span className="muted">Watching live: a new look every {cfg.coach.live_interval_s} seconds.</span>
         )}
         <button className="btn btn-ghost" onClick={() => check('button')}>
           Check now

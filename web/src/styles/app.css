@@ -181,7 +181,7 @@ textarea {
 .tier-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
 .tier-latency { font-weight: 400; opacity: 0.9; }
 .tier-checker { color: var(--tier-checker); background: var(--tier-checker-bg); }
-.tier-bitdeer { color: var(--tier-bitdeer); background: var(--tier-bitdeer-bg); }
+.tier-bitdeer, .tier-gemini, .tier-haiku, .tier-sonnet { color: var(--tier-bitdeer); background: var(--tier-bitdeer-bg); }
 .tier-claude { color: var(--tier-claude); background: var(--tier-claude-bg); }
 .tier-moss { color: var(--tier-moss); background: var(--tier-moss-bg); }
 .tier-static { color: var(--ink-2); background: var(--surface-2); }

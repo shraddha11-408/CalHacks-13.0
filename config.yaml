@@ -29,15 +29,18 @@ coach:
   left_area_s: 0.5            # no hands in the work area this long → snapshot
   timeout_s: 8                # no check this long → snapshot
   done_confirm: 2             # advance only after this many "done" answers in a row (AGENTS.md §6 debounce)
-  done_min_gap_s: 1.0         # ...at least this far apart
+  done_min_gap_s: 0.6         # ...at least this far apart
   done_confidence: 0.75       # a "done" below this counts as unclear
   low_confidence: 0.6         # below this counts as unclear
   unclear_escalate: 2         # unclear/low-confidence this many times → Claude with last 3 frames
-  snapshot_px: 768            # long side of snapshots sent to models (small printed words need detail)
+  snapshot_px: 768            # long side of snapshots sent to models (teach key frames, coach page)
+  live_snapshot_px: 768       # live stream frames: the sleeve's printed words need 768 px (0% mistakes caught at 512)
   keyframe_min_gap_s: 1.5     # teach: min time between key frames
   keyframes_max: 20
-  live_interval_s: 4          # Steps page live check: also snapshot this often while the camera runs
-  mark_with: claude           # who draws the on-screen mistake box: claude (accurate, +2-4 s) | bitdeer (instant, less accurate)
+  live_interval_s: 0.6        # live stream: start a new check this often, no waiting for a pause
+  live_parallel: 2            # ...with at most this many in flight (answers for an old step are dropped)
+  mark_with: live             # who draws the on-screen mistake box: live (same call, instant) | claude (separate call, +2-4 s) | bitdeer
+  live_timeout_s: 6           # a live check slower than this counts as unclear
   check_timeout_s: 8          # ≈ GLM p90 (7.6 s); slower checks hand over to Claude (~2 s) instead of waiting
 
 spacetimedb:
@@ -59,6 +62,14 @@ models:
   bitdeer_base_url: https://api-inference.bitdeer.ai/v1
   bitdeer_vision: zai-org/GLM-5.3-Flash   # best on the goal-based prompt: eval/results/live_prompt.json
   bitdeer_vision_alt: Qwen/Qwen3.8-27B    # runner-up
+  # Live step check. Bitdeer is paused (too slow live); a fast VLM sees the whole step list.
+  live_vision: claude               # claude | gemini | auto (gemini, Claude when Gemini is out of quota / overloaded). Our Gemini key hits its free quota (429) at stream rates.
+  live_send_ref: false              # also send the step's reference photo (one more image per call = slower)
+  gemini_live: gemini-3.6-flash     # Google AI Studio. ~1.5 s at minimal; 3.8-flash was overloaded (503) and rejects minimal
+  gemini_thinking: minimal          # minimal | low | medium | high
+  claude_live: claude-haiku-5-5    # watches the stream: fast (p50 1.7 s), finds "done" well, can't read small print
+  claude_confirm: claude-sonnet-5-5 # second look before a step advances: reads the sleeve words (44% of mistakes/frame vs Haiku 0%, p50 2.2 s). Empty = no split
+  claude_live_effort: low
   cartesia_tts: sonic-3.6           # WebSocket streaming; verified in kill-test
   cartesia_stt: ink-2               # realtime (/stt/turns/websocket); batch uses ink-whisper
 

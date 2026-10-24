@@ -1,51 +1,17 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
-import { SpacetimeDBProvider, useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react'
+import { useReducer, useSpacetimeDB, useTable } from 'spacetimedb/react'
+import { StdbGate } from '../components/Stdb'
 import { HealthDots, MetricTile, Panel, TierBadge, VerdictPill } from '../components/ui'
 import { asTier, fmtLatency, pct } from '../format'
-import { api, type Memory, type PublicConfig, type Step } from '../lib/api'
+import { api, type Memory, type Step } from '../lib/api'
 import { apiUrl } from '../lib/audio'
-import { DbConnection, reducers, tables } from '../module_bindings'
+import { reducers, tables } from '../module_bindings'
 import type { HealthState } from '../types'
 
-const TOKEN_KEY = 'stepwise-stdb-token'
-
-/** Connects to SpacetimeDB (local server or Maincloud, chosen in config.yaml) and renders the live dashboard. */
+/** Old live dashboard (now under /lab). */
 export function SupervisorPage() {
-  const [cfg, setCfg] = useState<PublicConfig | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  useEffect(() => {
-    api.config().then(setCfg).catch((e) => setErr(`Edge app not reachable: ${e.message}`))
-  }, [])
-  const builder = useMemo(() => {
-    if (!cfg) return null
-    let token: string | undefined
-    try {
-      token = localStorage.getItem(TOKEN_KEY) ?? undefined
-    } catch {
-      /* none */
-    }
-    return DbConnection.builder()
-      .withUri(cfg.spacetimedb.uri)
-      .withDatabaseName(cfg.spacetimedb.db)
-      .withToken(token)
-      .onConnect((_c, _id, tok) => {
-        try {
-          localStorage.setItem(TOKEN_KEY, tok)
-        } catch {
-          /* ok */
-        }
-      })
-      .onConnectError((_c, e) => setErr(`SpacetimeDB: ${e.message}`))
-  }, [cfg])
-
-  if (err && !builder) return <p className="muted">{err}</p>
-  if (!builder) return <p className="muted">Connecting…</p>
-  return (
-    <SpacetimeDBProvider connectionBuilder={builder}>
-      <Dashboard error={err} />
-    </SpacetimeDBProvider>
-  )
+  return <StdbGate>{(err) => <Dashboard error={err} />}</StdbGate>
 }
 
 const ago = (d: Date) => {
@@ -91,7 +57,7 @@ function Dashboard({ error }: { error: string | null }) {
 
   const checks = events.filter((e) => ['done', 'mistake', 'in_progress', 'unclear'].includes(e.kind))
   const mistakes = events.filter((e) => e.kind === 'mistake')
-  const bitdeerLat = checks.filter((e) => e.source === 'bitdeer').map((e) => e.latencyMs)
+  const bitdeerLat = checks.filter((e) => ['bitdeer', 'gemini', 'haiku', 'sonnet'].includes(e.source)).map((e) => e.latencyMs) // live check (Bitdeer paused)
   const claudeLat = checks.filter((e) => e.source === 'claude').map((e) => e.latencyMs)
   const instant = talks.filter((t) => t.answeredBy === 'instant').length
 
@@ -153,7 +119,7 @@ function Dashboard({ error }: { error: string | null }) {
       <div className="metrics">
         <MetricTile label="Checks" value={checks.length} sub={`${active.length} active session${active.length === 1 ? '' : 's'}`} />
         <MetricTile label="Mistakes caught" value={mistakes.length} sub="gently corrected" />
-        <MetricTile label="Bitdeer check p50" value={median(bitdeerLat) !== null ? fmtLatency(median(bitdeerLat)!) : '—'} sub={`${bitdeerLat.length} checks`} />
+        <MetricTile label="Live check p50" value={median(bitdeerLat) !== null ? fmtLatency(median(bitdeerLat)!) : '—'} sub={`${bitdeerLat.length} checks`} />
         <MetricTile label="Asked Claude" value={checks.length ? pct(claudeLat.length / checks.length) : '—'} sub={median(claudeLat) !== null ? `p50 ${fmtLatency(median(claudeLat)!)}` : 'when unclear twice'} />
         <MetricTile label="Questions answered instantly" value={talks.length ? pct(instant / talks.length) : '—'} sub={`${talks.length} questions`} />
       </div>

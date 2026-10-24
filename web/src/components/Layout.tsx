@@ -2,7 +2,7 @@ import { NavLink, Outlet } from 'react-router-dom'
 import { useTheme, type Theme } from '../theme'
 
 const NAV = [
-  { to: '/', label: 'Supervisor', end: true },
+  { to: '/lab', label: 'Live floor', end: true },
   { to: '/video', label: 'Video breakdown' },
   { to: '/teach', label: 'Teach' },
   { to: '/coach', label: 'Coach' },
@@ -30,7 +30,7 @@ export function Layout() {
     <div className="shell">
       <header className="topbar">
         <div className="topbar-inner">
-          <NavLink to="/" style={{ textDecoration: 'none' }} aria-label="Stepwise home">
+          <NavLink to="/" style={{ textDecoration: 'none' }} aria-label="IDD Help home">
             <Brand />
           </NavLink>
           <nav className="nav" aria-label="Main">

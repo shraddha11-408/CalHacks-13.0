@@ -2,6 +2,9 @@ import type { SupportLevel, Tier } from './types'
 
 export const TIER_LABEL: Record<Tier, string> = {
   bitdeer: 'Bitdeer',
+  gemini: 'Gemini Flash',
+  haiku: 'Claude Haiku',
+  sonnet: 'Claude Sonnet',
   claude: 'Claude',
   moss: 'Moss memory',
   cartesia: 'Cartesia',

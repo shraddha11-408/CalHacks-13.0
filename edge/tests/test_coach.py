@@ -66,3 +66,15 @@ def test_low_confidence_done_is_unclear():
     s = CoachSession("w", "W", TASK)
     assert s.classify({"status": "done", "confidence": 0.7}, 0.6, 0.75) == "unclear"
     assert s.classify({"status": "done", "confidence": 0.8}, 0.6, 0.75) == "done"
+
+
+def test_mistake_debounce_and_cooldown():
+    s = CoachSession("w", "W", TASK)
+    assert s.note_mistake(0.0, 2, 10) == "wait"
+    assert s.note_mistake(1.0, 2, 10) == "speak"
+    assert s.note_mistake(2.0, 2, 10) == "quiet"  # no nagging
+    s.not_mistake()
+    assert s.note_mistake(5.0, 2, 10) == "wait"
+    assert s.note_mistake(12.0, 2, 10) == "speak"  # cooldown over
+    s.advance()
+    assert s.mistake_streak == 0 and s.note_mistake(13.0, 2, 10) == "wait"
