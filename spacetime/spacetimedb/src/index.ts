@@ -86,7 +86,21 @@ const talkEvent = table(
   }
 );
 
-const spacetimedb = schema({ worker, task, session, stepEvent, helpRequest, talkEvent });
+// Every tap on "I'm going" (supervisor screen or a buddy's phone). The claim reducer is one
+// transaction, so exactly one attempt per help request can win; the rest are recorded as lost.
+const claimAttempt = table(
+  { name: 'claim_attempt', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    helpId: t.u64().index('btree'),
+    by: t.string(),
+    won: t.bool(),
+    winner: t.string(), // who holds the claim after this attempt
+    ts: t.timestamp(),
+  }
+);
+
+const spacetimedb = schema({ worker, task, session, stepEvent, helpRequest, talkEvent, claimAttempt });
 export default spacetimedb;
 
 export const upsertWorker = spacetimedb.reducer({ id: t.string(), name: t.string() }, (ctx, { id, name }) => {
@@ -154,12 +168,14 @@ export const requestHelp = spacetimedb.reducer(
   }
 );
 
-// Atomic: the first claimer wins; a second claim on the same request fails.
+// Atomic: the first claimer wins. A later claim is not an error: it is recorded as a lost attempt
+// (an error would roll the record back), so the floor can show the race and count double-claims.
 export const claimHelp = spacetimedb.reducer({ id: t.u64(), by: t.string() }, (ctx, { id, by }) => {
   const h = ctx.db.helpRequest.id.find(id);
   if (!h) throw new SenderError('no such help request');
-  if (h.status !== 'open') throw new SenderError(`already ${h.status} by ${h.claimedBy}`);
-  ctx.db.helpRequest.id.update({ ...h, status: 'claimed', claimedBy: by });
+  const won = h.status === 'open';
+  if (won) ctx.db.helpRequest.id.update({ ...h, status: 'claimed', claimedBy: by });
+  ctx.db.claimAttempt.insert({ id: 0n, helpId: id, by, won, winner: won ? by : h.claimedBy, ts: ctx.timestamp });
 });
 
 export const resolveHelp = spacetimedb.reducer({ id: t.u64(), note: t.string() }, (ctx, { id, note }) => {

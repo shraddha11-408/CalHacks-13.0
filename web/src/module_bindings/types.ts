@@ -10,6 +10,16 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const ClaimAttempt = __t.object("ClaimAttempt", {
+  id: __t.u64(),
+  helpId: __t.u64(),
+  by: __t.string(),
+  won: __t.bool(),
+  winner: __t.string(),
+  ts: __t.timestamp(),
+});
+export type ClaimAttempt = __Infer<typeof ClaimAttempt>;
+
 export const HelpRequest = __t.object("HelpRequest", {
   id: __t.u64(),
   sessionId: __t.string(),

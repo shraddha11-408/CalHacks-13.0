@@ -26,6 +26,9 @@ export function ChoosePage() {
           <span className="choice-sub">Help alerts, new tasks and worker reports.</span>
         </Link>
       </div>
+      <p className="small muted" style={{ marginTop: 18 }}>
+        A coworker helping out? Open <Link to="/buddy">the help buddy page</Link> on your phone.
+      </p>
     </AppShell>
   )
 }

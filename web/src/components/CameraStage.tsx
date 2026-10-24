@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 'react'
 import type { Area, Pt } from '../lib/triggers'
+import type { HandLandmarker } from '@mediapipe/tasks-vision'
 import { detectHands, FrameRing, loadHands } from '../lib/vision'
 
 const AREA_KEY = 'stepwise-work-area'
@@ -107,7 +108,8 @@ export function CameraStage({
     const ring = new FrameRing()
     if (ringRef) ringRef.current = ring
     if (videoRef) videoRef.current = video.current
-    loadHands().then((hl) => {
+    // the live check streams frames on a timer, so the loop must run even if hand tracking can't load
+    const run = (hl: HandLandmarker | null) => {
       const tick = (now: number) => {
         if (!alive) return
         raf = requestAnimationFrame(tick)
@@ -116,9 +118,9 @@ export function CameraStage({
         last = now
         let hands: Pt[][] = []
         try {
-          hands = detectHands(hl, v, now)
+          if (hl) hands = detectHands(hl, v, now)
         } catch {
-          return
+          /* no hands this frame */
         }
         const t = now / 1000
         ring.push(v, t, areaRef.current)
@@ -126,7 +128,8 @@ export function CameraStage({
         onFrameRef.current?.({ hands, t, area: areaRef.current })
       }
       raf = requestAnimationFrame(tick)
-    })
+    }
+    loadHands().then(run, () => run(null))
     return () => {
       alive = false
       cancelAnimationFrame(raf)

@@ -24,6 +24,10 @@ This file is the source of truth for anyone (human or agent) writing code in thi
 >   Sonnet takes the confirming second look, so a step advances (or is corrected) only when it agrees.
 >   Each call sees the whole step list and returns status, `done_through` and the mistake box. Automatic
 >   checks never escalate to Opus. Gemini is wired (`live_vision: auto`) but our key hits its free quota.
+>   **Debounce deviation (§6), for speed:** a step marked `close_look` at teach time (success hides in small
+>   details, e.g. which way printed words face) advances when Sonnet confirms Haiku's "done" on the same
+>   frame, immediately; other steps advance on two Haiku "done"s ≥ 0.6 s apart. Corrections keep the
+>   2-in-a-row rule, plus a 3 s grace after each new step and a 10 s cooldown.
 >   The Bitdeer call is commented out in `api.run_check`; numbers in `eval/results/live_fast.json`.
 > - **Database:** SpacetimeDB replaces Convex (no Convex key). Photos live on the edge laptop; rows hold their paths.
 > - **Talk:** Nemotron Omni is not in our Bitdeer catalog → Cartesia STT → intent → answer → Cartesia TTS.

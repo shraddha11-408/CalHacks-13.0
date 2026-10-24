@@ -2,7 +2,9 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { useReducer, useTable } from 'spacetimedb/react'
 import { AppShell } from '../components/AppShell'
+import { RaceLog } from '../components/RaceLog'
 import { StdbGate } from '../components/Stdb'
+import { doubleClaims } from '../lib/claims'
 import { fmtLatency } from '../format'
 import { api, type Step, type Task, type VideoJob, type WorkerReport } from '../lib/api'
 import { apiUrl } from '../lib/audio'
@@ -73,6 +75,7 @@ function useStepLookup() {
 function HelpTab() {
   const [help] = useTable(tables.helpRequest)
   const [workers] = useTable(tables.worker)
+  const [attempts] = useTable(tables.claimAttempt)
   const claim = useReducer(reducers.claimHelp)
   const resolve = useReducer(reducers.resolveHelp)
   const { title, stepText } = useStepLookup()
@@ -87,6 +90,10 @@ function HelpTab() {
   const done = sorted.filter((h) => h.status === 'resolved').slice(0, 10)
   return (
     <div className="stack" style={{ gap: 14 }}>
+      <p className="small muted">
+        Alerts also go to help buddies' phones (<Link to="/buddy">/buddy</Link>). The first “I'm going” wins.{' '}
+        <span className="badge-soft num">double-claims: {doubleClaims(attempts)}</span>
+      </p>
       {open.length === 0 && <div className="empty">No one needs help right now.</div>}
       {open.map((h) => (
         <article key={String(h.id)} className={`alert ${h.status === 'open' ? 'alert-open' : ''}`}>
@@ -110,6 +117,7 @@ function HelpTab() {
                 </button>
               )}
             </div>
+            <RaceLog attempts={attempts.filter((a) => a.helpId === h.id)} me="Supervisor" />
           </div>
         </article>
       ))}
@@ -137,6 +145,9 @@ function AddTaskTab() {
   const [tasks, setTasks] = useState<Task[] | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [demo, setDemo] = useState(false)
+  const [cloneOk, setCloneOk] = useState(false)
+  const [who, setWho] = useState('')
+  const consentBy = cloneOk && who.trim() ? who.trim() : ''
   const file = useRef<HTMLInputElement | null>(null)
   useEffect(() => {
     api.videoDemo().then((d) => setDemo(d.available)).catch(() => {})
@@ -169,7 +180,18 @@ function AddTaskTab() {
   return (
     <div className="stack" style={{ gap: 18 }}>
       <p className="muted">Do the task once in front of the camera and talk through it. Claude turns the video into simple steps.</p>
-      <Recorder disabled={running} onDone={(f) => run(() => api.uploadVideo(f))} />
+      <section className="card consent">
+        <label className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
+          <input type="checkbox" checked={cloneOk} onChange={(e) => setCloneOk(e.target.checked)} style={{ marginTop: 6 }} />
+          <span>
+            <strong>Coach in my voice.</strong> I agree that IDD Help may copy my voice from this video (Cartesia voice cloning), only to speak the
+            instructions for these tasks. I can ask for it to be deleted at any time.
+          </span>
+        </label>
+        {cloneOk && <input className="field" placeholder="Your name (records your consent)" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Your name" />}
+        {cloneOk && !who.trim() && <span className="small muted">Type your name to turn on voice cloning.</span>}
+      </section>
+      <Recorder disabled={running} onDone={(f) => run(() => api.uploadVideo(f, consentBy))} />
       <div className="row">
         <input
           ref={file}
@@ -178,7 +200,7 @@ function AddTaskTab() {
           className="visually-hidden"
           onChange={(e) => {
             const f = e.target.files?.[0]
-            if (f) void run(() => api.uploadVideo(f))
+            if (f) void run(() => api.uploadVideo(f, consentBy))
             e.target.value = ''
           }}
         />
@@ -186,15 +208,16 @@ function AddTaskTab() {
           ⬆ Upload a video file
         </button>
         {demo && (
-          <button className="btn btn-ghost" disabled={running} onClick={() => run(api.analyzeDemo)}>
+          <button className="btn btn-ghost" disabled={running} onClick={() => run(() => api.analyzeDemo(consentBy))}>
             Use the demo video
           </button>
         )}
       </div>
       {err && <p className="note-almost">{err}</p>}
+      {job?.voice_error && <p className="note-almost">{job.voice_error}</p>}
       {running && job && (
         <ol className="stages" aria-live="polite">
-          {STAGES.map((s) => {
+          {STAGES.filter((s) => s.key !== 'cloning_voice' || consentBy).map((s) => {
             const at = STAGES.findIndex((x) => x.key === job.stage)
             const me = STAGES.findIndex((x) => x.key === s.key)
             return (
@@ -216,6 +239,7 @@ function AddTaskTab() {
               Open as worker →
             </Link>
           </div>
+          <span className="small muted">{t.voice ? `Instructions in ${t.voice.name}'s voice (cloned with consent).` : 'Instructions in the standard coach voice.'}</span>
           <ol className="step-list">
             {t.steps.map((s, k) => (
               <li key={s.id} className="step-item">

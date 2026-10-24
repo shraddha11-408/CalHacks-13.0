@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import os
-from concurrent.futures import ThreadPoolExecutor
+from concurrent.futures import Future, ThreadPoolExecutor, wait
 
 import httpx
 
@@ -26,6 +26,7 @@ class Stdb:
         self._http = httpx.Client(base_url=self.uri, timeout=10)
         self._pool = ThreadPoolExecutor(max_workers=4, thread_name_prefix="stdb")
         self._auth: dict[str, str] = {}
+        self._pending: set[Future] = set()
         self.error: str | None = None
         self.connect()
 
@@ -63,4 +64,23 @@ class Stdb:
             if not ok:
                 log.warning("reducer %s failed: %s", reducer, msg)
 
-        self._pool.submit(run)
+        f = self._pool.submit(run)
+        self._pending.add(f)
+        f.add_done_callback(self._pending.discard)
+
+    def drain(self, timeout: float = 2.0) -> None:
+        """Wait (briefly) for fire-and-forget writes, e.g. before reading a session back for its summary."""
+        if self._pending:
+            wait(list(self._pending), timeout=timeout)
+
+    def sql(self, query: str) -> list[dict]:
+        """Read rows (SpacetimeDB SQL over HTTP) as dicts by column name. Off the hot path only."""
+        if not self._auth and not self.connect():
+            raise RuntimeError(self.error or "not connected")
+        r = self._http.post(f"/v1/database/{self.db}/sql", content=query, headers=self._auth)
+        r.raise_for_status()
+        out: list[dict] = []
+        for table in r.json():
+            cols = [e["name"].get("some", "") if isinstance(e.get("name"), dict) else e.get("name", "") for e in table["schema"]["elements"]]
+            out += [dict(zip(cols, row)) for row in table["rows"]]
+        return out

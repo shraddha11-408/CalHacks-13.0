@@ -8,24 +8,38 @@ let handsP: Promise<HandLandmarker> | null = null
 let facesP: Promise<FaceDetector> | null = null
 const fileset = () => FilesetResolver.forVisionTasks('/mediapipe-wasm')
 
+type Delegate = 'GPU' | 'CPU'
+/** GPU first; some machines/browsers have no WebGL for MediaPipe, so fall back to CPU. */
+async function gpuOrCpu<T>(make: (d: Delegate) => Promise<T>): Promise<T> {
+  try {
+    return await make('GPU')
+  } catch {
+    return await make('CPU')
+  }
+}
+
 export function loadHands(): Promise<HandLandmarker> {
   handsP ??= fileset().then((fs) =>
-    HandLandmarker.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: '/models/hand_landmarker.task', delegate: 'GPU' },
-      runningMode: 'VIDEO',
-      numHands: 2,
-    }),
+    gpuOrCpu((delegate) =>
+      HandLandmarker.createFromOptions(fs, {
+        baseOptions: { modelAssetPath: '/models/hand_landmarker.task', delegate },
+        runningMode: 'VIDEO',
+        numHands: 2,
+      }),
+    ),
   )
   return handsP
 }
 
 export function loadFaces(): Promise<FaceDetector> {
   facesP ??= fileset().then((fs) =>
-    FaceDetector.createFromOptions(fs, {
-      baseOptions: { modelAssetPath: '/models/blaze_face_short_range.tflite', delegate: 'GPU' },
-      runningMode: 'IMAGE',
-      minDetectionConfidence: 0.6,
-    }),
+    gpuOrCpu((delegate) =>
+      FaceDetector.createFromOptions(fs, {
+        baseOptions: { modelAssetPath: '/models/blaze_face_short_range.tflite', delegate },
+        runningMode: 'IMAGE',
+        minDetectionConfidence: 0.6,
+      }),
+    ),
   )
   return facesP
 }
@@ -110,9 +124,20 @@ export async function snapshot(src: HTMLCanvasElement, area: Area | null, px: nu
   const wctx = work.getContext('2d')!
   wctx.drawImage(src, 0, 0)
   let faces = 0
+  let fd: FaceDetector
   try {
-    const fd = await loadFaces()
-    const det = fd.detect(work)
+    fd = await loadFaces()
+  } catch {
+    // privacy rule: faces are blurred before any frame leaves the browser. No blur → no photo.
+    throw new Error('face blur is unavailable, so no photo was sent')
+  }
+  {
+    let det: ReturnType<FaceDetector['detect']>
+    try {
+      det = fd.detect(work)
+    } catch {
+      throw new Error('face blur is unavailable, so no photo was sent')
+    }
     for (const d of det.detections) {
       const b = d.boundingBox
       if (!b) continue
@@ -132,8 +157,6 @@ export async function snapshot(src: HTMLCanvasElement, area: Area | null, px: nu
       wctx.drawImage(work, 0, 0)
       wctx.restore()
     }
-  } catch {
-    // face model failed to load: fall through, the crop below still excludes most of the room
   }
   const a = area ?? { x: 0, y: 0, w: 1, h: 1 }
   const sx = a.x * work.width

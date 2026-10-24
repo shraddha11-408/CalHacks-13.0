@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react'
 import { asTier } from '../format'
 import { api, type CheckResult, type PublicConfig, type StepPayload } from '../lib/api'
-import type { Say } from '../lib/audio'
+import type { Say, SpeechKind } from '../lib/audio'
 import { TriggerEngine, type Area, type TriggerState } from '../lib/triggers'
 import { grab, snapshot, type FrameRing } from '../lib/vision'
 import { CameraStage, type FrameInfo } from './CameraStage'
@@ -78,7 +78,7 @@ export function LiveCheck({
 }: {
   cfg: PublicConfig
   sessionId: string
-  onSay: (s: Say[]) => void
+  onSay: (s: Say[], kind: SpeechKind) => void
   onStep: (p: StepPayload) => void
   onFinished: () => void
   /** one call per spoken correction (repeats inside the 10 s cooldown are not reported) */
@@ -134,7 +134,7 @@ export function LiveCheck({
           setErr(null)
         }
         if (r.status === 'mistake') {
-          if (r.say?.length) onSay(r.say) // voice first: never wait for the mark (empty while in the 10 s cooldown)
+          if (r.say?.length && !older) onSay(r.say, 'correction') // voice first; a newer frame already answered → skip
           const wrong = r.reason || 'Something needs fixing.'
           const fix = r.fix || r.say[0]?.text || ''
           if (!r.repeat) onMistake?.({ stepIndex: r.step_index ?? 0, what: wrong, fix, photo: r.photo || null, at: Date.now() })
@@ -152,14 +152,15 @@ export function LiveCheck({
           onFinished()
         } else if (r.status === 'done' || r.status === 'skipped') {
           setMark(null)
-          if (r.say?.length) onSay(r.say)
+          if (r.say?.length) onSay(r.say, 'advance')
           if (r.finished) onFinished()
           else if (r.next) onStep(r.next)
         } else if (r.status === 'in_progress' || r.status === 'confirming') {
           // "confirming": the next streamed frame is the second look. Keep a mark up a few seconds, then clear.
           if (!older) setMark((m) => (m && Date.now() - m.at > 4000 ? null : m))
+          if (r.say?.length && !older) onSay(r.say, 'stuck') // stuck on this step: "Take your time." + the next small action
         } else if (r.say?.length) {
-          onSay(r.say)
+          onSay(r.say, 'stuck')
         }
       } catch (e) {
         setErr(`Check failed: ${(e as Error).message}`)

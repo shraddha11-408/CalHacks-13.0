@@ -174,3 +174,32 @@
 
 /* the spoken-caption bar under worker pages */
 .app-main .caption { margin-top: 22px; }
+
+/* Always-on mic */
+.mic-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 14px; font-weight: 700; font-size: 15px; cursor: pointer; }
+.mic-dot { width: 10px; height: 10px; border-radius: 50%; background: var(--idle); }
+.mic-listening .mic-dot { background: var(--success); }
+.mic-hearing { border-color: var(--success); }
+.mic-hearing .mic-dot { background: var(--success); animation: blink 0.6s infinite; }
+.mic-thinking .mic-dot { background: var(--primary); animation: blink 0.8s infinite; }
+.mic-paused .mic-dot { background: var(--primary); }
+.mic-off { color: var(--ink-2); }
+.chat { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.chat li { display: grid; gap: 2px; padding: 10px 14px; border-radius: 14px; background: var(--primary-soft); }
+.chat-you { font-size: 15px; color: var(--primary-soft-ink); }
+.chat-coach { font-weight: 700; color: var(--primary-soft-ink); }
+
+.consent { display: grid; gap: 10px; }
+
+/* Help-claim race (buddy phones) */
+.race { list-style: none; margin: 4px 0 0; padding: 0; display: grid; gap: 4px; }
+.race li { display: flex; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.race-won { color: var(--success); }
+.race-lost { color: var(--ink-2); }
+.race-banner { font-weight: 700; padding: 10px 14px; border-radius: 12px; background: var(--surface-2); }
+.race-banner-won { color: var(--success); background: var(--success-bg); }
+
+/* Progress you can hear */
+.progress-card { display: grid; gap: 10px; padding: 18px 20px; border-radius: 18px; background: var(--primary-soft); color: var(--primary-soft-ink); }
+.progress-card .muted, .progress-card .step-n { color: var(--primary-soft-ink); }
+.progress-text { font-size: clamp(22px, 2.6vw, 28px); font-weight: 700; line-height: 1.3; }

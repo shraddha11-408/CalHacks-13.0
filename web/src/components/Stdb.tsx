@@ -20,8 +20,11 @@ export function StdbGate({ children }: { children: (error: string | null) => Rea
     } catch {
       /* none */
     }
+    // a local server is reached through the web server's /v1 proxy (works from phones too)
+    const local = /\/\/(127\.0\.0\.1|localhost)[:/]/.test(cfg.spacetimedb.uri)
+    const uri = local ? `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}` : cfg.spacetimedb.uri
     return DbConnection.builder()
-      .withUri(cfg.spacetimedb.uri)
+      .withUri(uri)
       .withDatabaseName(cfg.spacetimedb.db)
       .withToken(token)
       .onConnect((_c, _id, tok) => {

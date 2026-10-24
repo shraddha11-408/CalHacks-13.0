@@ -37,10 +37,12 @@ coach:
   live_snapshot_px: 768       # live stream frames: the sleeve's printed words need 768 px (0% mistakes caught at 512)
   keyframe_min_gap_s: 1.5     # teach: min time between key frames
   keyframes_max: 20
-  live_interval_s: 0.6        # live stream: start a new check this often, no waiting for a pause
-  live_parallel: 2            # ...with at most this many in flight (answers for an old step are dropped)
+  live_interval_s: 0.5        # live stream: start a new check this often, no waiting for a pause
+  live_parallel: 3            # ...with at most this many in flight (answers for an old step are dropped)
+  step_grace_s: 3             # no automatic correction this soon after a new step (hand-over frames)
   mark_with: live             # who draws the on-screen mistake box: live (same call, instant) | claude (separate call, +2-4 s) | bitdeer
   live_timeout_s: 6           # a live check slower than this counts as unclear
+  stuck_after_s: [15, 35, 60] # no progress on a step this long → take your time + hint, → hint + ask me, → offer help
   check_timeout_s: 8          # ≈ GLM p90 (7.6 s); slower checks hand over to Claude (~2 s) instead of waiting
 
 spacetimedb:
@@ -58,6 +60,7 @@ models:
   claude: claude-opus-5-5            # all Claude calls; effort per use below
   claude_effort_teach: high          # step list from key frames (once per task)
   claude_effort_judge: low           # unclear checks (latency matters)
+  claude_answer: claude-sonnet-5-5   # worker questions (always-on mic): fast enough to talk to
   claude_effort_answer: low          # open questions from the worker
   bitdeer_base_url: https://api-inference.bitdeer.ai/v1
   bitdeer_vision: zai-org/GLM-5.3-Flash   # best on the goal-based prompt: eval/results/live_prompt.json

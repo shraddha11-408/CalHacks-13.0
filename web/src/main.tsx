@@ -8,6 +8,7 @@ import './styles/tokens.css'
 import './styles/app.css'
 import './styles/idd.css'
 import { Layout } from './components/Layout'
+import { BuddyPage } from './pages/Buddy'
 import { ChoosePage } from './pages/Choose'
 import { CoachPage } from './pages/Coach'
 import { HealthPage } from './pages/Health'
@@ -29,6 +30,7 @@ createRoot(document.getElementById('root')!).render(
         <Route path="worker" element={<WorkerPage />} />
         <Route path="worker/:taskId" element={<WorkerTaskPage />} />
         <Route path="supervisor" element={<SupervisorHomePage />} />
+        <Route path="buddy" element={<BuddyPage />} />
         {/* earlier build pages (dev / judging slices), kept under /lab */}
         <Route element={<Layout />}>
           <Route path="lab" element={<SupervisorPage />} />

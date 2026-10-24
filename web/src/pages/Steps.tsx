@@ -4,7 +4,7 @@ import { Brand } from '../components/Layout'
 import { LiveCheck } from '../components/LiveCheck'
 import { CaptionBar, StepDots } from '../components/ui'
 import { api, type PublicConfig, type StepPayload, type Task } from '../lib/api'
-import { AudioQueue, apiUrl, type Say } from '../lib/audio'
+import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
 
 const ttsUrl = (text: string) => `/tts?text=${encodeURIComponent(text)}` // cached clip if pre-recorded
 
@@ -97,7 +97,7 @@ function StepsView({ taskId }: { taskId?: string }) {
     sidRef.current = null
     setSid(null)
   }
-  const playSay = useCallback((items: Say[]) => audio.current?.play(items), [])
+  const playSay = useCallback((items: Say[], kind: SpeechKind) => audio.current?.say(items, kind), [])
   const onLiveStep = useCallback((p: StepPayload) => {
     quietNext.current = true
     setShowWhy(false)

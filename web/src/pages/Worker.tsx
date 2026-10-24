@@ -3,8 +3,9 @@ import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { LiveCheck, type LoggedMistake } from '../components/LiveCheck'
 import { CaptionBar, StepDots } from '../components/ui'
-import { api, type PublicConfig, type StepPayload, type Task } from '../lib/api'
-import { AudioQueue, apiUrl, type Say } from '../lib/audio'
+import { api, type Progress, type PublicConfig, type StepPayload, type TalkResult, type Task } from '../lib/api'
+import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
+import { Listener, type ListenPhase } from '../lib/listen'
 import { grab, snapshot } from '../lib/vision'
 
 const NAME_KEY = 'stepwise-worker'
@@ -15,7 +16,7 @@ const readName = () => {
     return ''
   }
 }
-const ttsUrl = (text: string) => `/tts?text=${encodeURIComponent(text)}`
+const ttsUrl = (text: string, voice?: string) => `/tts?text=${encodeURIComponent(text)}${voice ? `&voice=${encodeURIComponent(voice)}` : ''}`
 const clock = (ms: number) => {
   const s = Math.max(0, Math.round(ms / 1000))
   return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
@@ -113,6 +114,12 @@ function WorkerTask({ taskId }: { taskId: string }) {
   const [speaking, setSpeaking] = useState(false)
   const [err, setErr] = useState<string | null>(null)
   const [helpSent, setHelpSent] = useState(false)
+  const [micOn, setMicOn] = useState(true)
+  const [listen, setListen] = useState<ListenPhase>('off')
+  const [chat, setChat] = useState<{ said: string; answer: string }[]>([])
+  const [thinking, setThinking] = useState(false)
+  const [progress, setProgress] = useState<Progress | null>(null)
+  const thinkingRef = useRef(false)
   const audio = useRef<AudioQueue | null>(null)
   const sidRef = useRef<string | null>(null)
   const video = useRef<HTMLVideoElement | null>(null)
@@ -132,8 +139,10 @@ function WorkerTask({ taskId }: { taskId: string }) {
     }
   }, [taskId])
 
-  const say = useCallback((text: string) => audio.current?.play([{ text, url: ttsUrl(text) }]), [])
-  const playSay = useCallback((items: Say[]) => audio.current?.play(items), [])
+  // the worker pressed a button: always say it
+  const voiceId = task?.voice?.id
+  const say = useCallback((text: string) => audio.current?.say([{ text, url: ttsUrl(text, voiceId) }], 'answer', { force: true }), [voiceId])
+  const playSay = useCallback((items: Say[], kind: SpeechKind) => audio.current?.say(items, kind), [])
   const step = task?.steps[i]
 
   // speak each new step while running (a live "done" already spoke "Great!" + the next step)
@@ -142,11 +151,23 @@ function WorkerTask({ taskId }: { taskId: string }) {
       quietNext.current = false
       return
     }
-    if (phase === 'running' && step) say(step.instruction)
-  }, [phase, step, say])
+    if (phase === 'running' && step) audio.current?.say([{ text: step.instruction, url: ttsUrl(step.instruction, voiceId) }], 'advance', { force: true })
+  }, [phase, step, voiceId])
 
   const finish = useCallback((complete: boolean) => {
-    if (sidRef.current) void api.end(sidRef.current)
+    const id = sidRef.current
+    if (id) {
+      // progress you can hear: SpacetimeDB numbers + a Moss detail, spoken after "You did every step"
+      setProgress(null)
+      void api
+        .end(id)
+        .then(() => api.progress(id))
+        .then((p) => {
+          setProgress(p)
+          audio.current?.say(p.say, 'answer', { force: true })
+        })
+        .catch(() => {})
+    }
     sidRef.current = null
     setSid(null)
     setFinished(complete)
@@ -165,7 +186,10 @@ function WorkerTask({ taskId }: { taskId: string }) {
       sidRef.current = r.session_id
       setSid(r.session_id)
       setStartedAt(Date.now())
+      setChat([])
+      quietNext.current = true // r.say = Moss tip (if any) + step 1
       setPhase('running')
+      audio.current?.say(r.say, 'advance', { force: true })
     } catch (e) {
       setErr(`The camera check could not start: ${(e as Error).message}`)
     }
@@ -180,6 +204,64 @@ function WorkerTask({ taskId }: { taskId: string }) {
     finish(true)
   }, [finish])
   const onMistake = useCallback((m: LoggedMistake) => setMistakes((xs) => [...xs, m]), [])
+
+  /** One utterance from the always-on mic → speech-to-text → answer (or a check, a hint, help). */
+  const ask = useCallback(
+    async (blob: Blob) => {
+      const id = sidRef.current
+      if (!id || thinkingRef.current) return
+      thinkingRef.current = true
+      setThinking(true)
+      // a slow answer (Claude) gets "Let me look." first, so the worker knows they were heard
+      const filler = window.setTimeout(() => cfg?.phrases.let_me_look && audio.current?.say([cfg.phrases.let_me_look], 'filler', { force: true }), 1800)
+      try {
+        let image = ''
+        try {
+          if (video.current) image = (await snapshot(grab(video.current), { x: 0, y: 0, w: 1, h: 1 }, 640)).jpeg
+        } catch {
+          /* answer without a photo */
+        }
+        const r: TalkResult = await api.talk(id, blob, image)
+        if (!r.say.length) return // nothing said, our own voice, or not meant for the coach
+        setChat((c) => [...c.slice(-2), { said: r.said, answer: r.answer }])
+        const ck = r.check
+        if (ck?.status === 'mistake' && !ck.repeat) onMistake({ stepIndex: ck.step_index ?? i, what: ck.reason || 'Something needs fixing.', fix: ck.fix || '', photo: ck.photo || null, at: Date.now() })
+        if (ck?.finished || ck?.status === 'finished') {
+          audio.current?.say(r.say, 'advance', { force: true })
+          finish(true)
+          return
+        }
+        if (ck?.next) {
+          quietNext.current = true
+          setI(ck.next.index)
+        }
+        if (r.help) setHelpSent(true)
+        audio.current?.say(r.say, ck?.next ? 'advance' : 'answer', { force: true })
+      } catch (e) {
+        setErr(`I couldn't hear that: ${(e as Error).message}`)
+      } finally {
+        window.clearTimeout(filler)
+        thinkingRef.current = false
+        setThinking(false)
+      }
+    },
+    [cfg, i, finish, onMistake],
+  )
+  const askRef = useRef(ask)
+  useEffect(() => {
+    askRef.current = ask
+  }, [ask])
+
+  // always-on mic while the task runs (paused while the coach talks or thinks)
+  useEffect(() => {
+    if (phase !== 'running' || !micOn) return
+    const l = new Listener({ onUtterance: (b) => void askRef.current(b), isBlocked: () => !!audio.current?.busy || thinkingRef.current, onPhase: setListen })
+    l.start().catch((e) => {
+      setErr(`Microphone blocked: ${(e as Error).message}`)
+      setMicOn(false)
+    })
+    return () => l.stop()
+  }, [phase, micOn])
 
   const go = (d: number) => {
     if (!task) return
@@ -203,7 +285,7 @@ function WorkerTask({ taskId }: { taskId: string }) {
     }
     try {
       const r = await api.help(sidRef.current, image)
-      playSay(r.say)
+      playSay(r.say, 'answer')
       setHelpSent(true)
     } catch (e) {
       setErr(`Help could not be sent: ${(e as Error).message}`)
@@ -227,6 +309,7 @@ function WorkerTask({ taskId }: { taskId: string }) {
           <div>
             <h1 className="app-title">{task.title}</h1>
             <p className="muted">{task.steps.length} steps. Look at them, then press Start.</p>
+            {task.voice && <p className="small muted">🔊 You will hear {task.voice.name}'s voice.</p>}
           </div>
           <ol className="step-list">
             {task.steps.map((s, k) => (
@@ -259,6 +342,23 @@ function WorkerTask({ taskId }: { taskId: string }) {
               <StepDots total={task.steps.length} current={i} />
             </div>
             <p className="run-instruction">{step.instruction}</p>
+            <div className="row" style={{ gap: 8 }}>
+              <button className={`mic-chip mic-${micOn ? (thinking ? 'thinking' : listen) : 'off'}`} onClick={() => setMicOn((m) => !m)} aria-pressed={micOn} aria-label={micOn ? 'Microphone on. Turn off' : 'Microphone off. Turn on'}>
+                <span className="mic-dot" aria-hidden />
+                {!micOn ? 'Mic off' : thinking ? 'Thinking…' : listen === 'hearing' ? 'Hearing you…' : listen === 'paused' ? 'Coach is talking' : 'Listening — just ask'}
+              </button>
+              <span className="small muted">Try: “Is this right?” · “I'm stuck” · “Why?” · “Help”</span>
+            </div>
+            {chat.length > 0 && (
+              <ul className="chat" aria-live="polite">
+                {chat.map((c, k) => (
+                  <li key={k}>
+                    <span className="chat-you">You: “{c.said}”</span>
+                    <span className="chat-coach">{c.answer}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
             <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} />
             <div className="row">
               <button className="btn btn-secondary" onClick={() => say(step.instruction)}>
@@ -308,6 +408,26 @@ function WorkerTask({ taskId }: { taskId: string }) {
               </div>
             </div>
           </div>
+          <section className="progress-card" aria-live="polite">
+            <span className="step-n">Your progress</span>
+            {progress ? (
+              <>
+                <p className="progress-text">{progress.text}</p>
+                <div className="row">
+                  <button className="btn btn-secondary btn-sm" onClick={() => audio.current?.say(progress.say, 'answer', { force: true })}>
+                    🔊 Hear it again
+                  </button>
+                  {progress.numbers.last_time && (
+                    <span className="small muted">
+                      Last time: {progress.numbers.last_time.by_self} steps by yourself, {progress.numbers.last_time.corrections} reminders
+                    </span>
+                  )}
+                </div>
+              </>
+            ) : (
+              <p className="muted">Counting your steps…</p>
+            )}
+          </section>
           <MistakeLog task={task} mistakes={mistakes} startedAt={startedAt} />
           <div className="row">
             <button className="btn btn-primary btn-xl" onClick={start}>

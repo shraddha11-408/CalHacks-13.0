@@ -49,6 +49,7 @@ import UpsertWorkerReducer from "./upsert_worker_reducer";
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import ClaimAttemptRow from "./claim_attempt_table";
 import HelpRequestRow from "./help_request_table";
 import SessionRow from "./session_table";
 import StepEventRow from "./step_event_table";
@@ -60,6 +61,20 @@ import WorkerRow from "./worker_table";
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  claimAttempt: __table({
+    name: 'claim_attempt',
+    indexes: [
+      { accessor: 'helpId', name: 'claim_attempt_help_id_idx_btree', algorithm: 'btree', columns: [
+        'helpId',
+      ] },
+      { accessor: 'id', name: 'claim_attempt_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'claim_attempt_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, ClaimAttemptRow),
   helpRequest: __table({
     name: 'help_request',
     indexes: [

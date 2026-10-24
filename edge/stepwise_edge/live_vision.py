@@ -84,6 +84,7 @@ def parse(d: dict, total: int) -> dict:
         "box": box_from_2d(d.get("box_2d")) if status == "mistake" else None,
         "fix": str(d.get("fix") or "")[:200] if status == "mistake" else "",
         "seen": str(d.get("seen", ""))[:200],
+        "hint": str(d.get("hint") or "")[:200],
     }
 
 

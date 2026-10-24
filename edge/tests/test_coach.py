@@ -30,7 +30,8 @@ def test_intents():
     assert intent_of("what's next") == "next"
     assert intent_of("say that again") == "repeat"
     assert intent_of("why do I do that") == "why"
-    assert intent_of("I'm stuck") == "help"
+    assert intent_of("I'm stuck") == "stuck" and intent_of("I don't know") == "stuck"
+    assert intent_of("help me please") == "help"
     assert intent_of("where do the towels go after") == "open"
 
 
@@ -78,3 +79,26 @@ def test_mistake_debounce_and_cooldown():
     assert s.note_mistake(12.0, 2, 10) == "speak"  # cooldown over
     s.advance()
     assert s.mistake_streak == 0 and s.note_mistake(13.0, 2, 10) == "wait"
+
+
+def test_stuck_levels_fire_once_each_and_reset_on_new_step():
+    s = CoachSession("w", "W", TASK)
+    t0 = s.step_started_at
+    after = [15, 35, 60]
+    assert s.stuck_due(t0 + 5, after) is None
+    assert s.stuck_due(t0 + 16, after) == 0
+    assert s.stuck_due(t0 + 17, after) is None  # level 0 only once
+    assert s.stuck_due(t0 + 36, after) == 1
+    assert s.stuck_due(t0 + 61, after) == 2
+    assert s.stuck_due(t0 + 999, after) is None
+    s.advance()
+    assert s.stuck_level == 0 and s.stuck_due(s.step_started_at + 16, after) == 0
+
+
+def test_echo_guard_ignores_the_apps_own_voice():
+    s = CoachSession("w", "W", TASK)
+    s.note_spoken(["Great job!", "Pick up the paper coffee cup with the lid."], now=100.0)
+    assert s.is_echo("pick up the paper coffee cup with the lid", now=105.0)
+    assert s.is_echo("great job", now=101.0)
+    assert not s.is_echo("is this the right cup?", now=105.0)
+    assert not s.is_echo("pick up the paper coffee cup with the lid", now=200.0)  # long ago: the worker repeating it

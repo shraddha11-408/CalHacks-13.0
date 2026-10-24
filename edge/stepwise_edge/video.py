@@ -160,6 +160,7 @@ class Job:
         self.stages: dict[str, float] = {}
         self.error: str | None = None
         self.result: dict | None = None
+        self.voice_error: str | None = None
         self.started = time.time()
         self._t = time.perf_counter()
 
@@ -170,7 +171,7 @@ class Job:
         self.stage, self._t = stage, now
 
     def view(self) -> dict:
-        return {"job_id": self.id, "video_id": self.video_id, "name": self.name, "stage": self.stage, "stages_ms": self.stages, "error": self.error, "result": self.result}
+        return {"job_id": self.id, "video_id": self.video_id, "name": self.name, "stage": self.stage, "stages_ms": self.stages, "error": self.error, "voice_error": self.voice_error, "result": self.result}
 
 
 def save_analysis(root: Path, video_id: str, data: dict) -> None:

@@ -68,8 +68,9 @@ def judge(model: str, effort: str, snapshots: list[bytes], ref: bytes | None, st
     return _call(model, effort, JUDGE_SYSTEM, content, CHECK_SCHEMA, max_tokens=4000)
 
 
-def answer(model: str, effort: str, question: str, frame: bytes | None, task_title: str, step: dict, step_no: int, total: int) -> tuple[str, float]:
-    content: list = [{"type": "text", "text": f"Task: {task_title}. The worker is on step {step_no} of {total}.\n{_step_text(step)}\nThe worker asked: \"{question}\""}]
+def answer(model: str, effort: str, question: str, frame: bytes | None, task_title: str, step: dict, step_no: int, total: int, notes: list[str] | None = None) -> tuple[str, float]:
+    memo = ("\nNotes about this worker (from memory):\n- " + "\n- ".join(notes)) if notes else ""
+    content: list = [{"type": "text", "text": f"Task: {task_title}. The worker is on step {step_no} of {total}.\n{_step_text(step)}{memo}\nThe worker said: \"{question}\""}]
     if frame:
         content += [{"type": "text", "text": "What the glasses see right now:"}, _img(frame)]
     out, ms = _call(model, effort, ANSWER_SYSTEM, content, None, max_tokens=4000)

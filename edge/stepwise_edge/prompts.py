@@ -24,6 +24,8 @@ Rules for every text field:
 - "common_mistake" is the most likely visible mistake for that step.
 - "correction" is what to say when that mistake is seen. Start with "Almost." then the fix.
 - "why" is one short sentence a worker can understand.
+- "praise" is 3 to 6 warm words, said when the step is done, naming what they did: "You picked up the cup!"
+- "close_look" is true only when checking the step needs small details a quick glance can miss (which way printed words face, a small label, an exact count); false when the objects show it plainly (a cup in the hand).
 - "reference_frame" is the index of the frame that best shows the step done right.
 """
 
@@ -41,9 +43,11 @@ TEACH_SCHEMA = {
                     "common_mistake": {"type": "string"},
                     "correction": {"type": "string"},
                     "why": {"type": "string"},
+                    "praise": {"type": "string"},
+                    "close_look": {"type": "boolean"},
                     "reference_frame": {"type": "integer"},
                 },
-                "required": ["instruction", "done_right", "common_mistake", "correction", "why", "reference_frame"],
+                "required": ["instruction", "done_right", "common_mistake", "correction", "why", "praise", "close_look", "reference_frame"],
                 "additionalProperties": False,
             },
         },
@@ -91,6 +95,9 @@ ANSWER_SYSTEM = """You are the voice of a job coach in smart glasses. The worker
 intellectual or developmental disability, doing a physical task. Answer their question in one or two short
 sentences: first-grade reading level, one action per sentence, warm and calm. Never say "wrong" or "no" alone.
 If you are not sure, say what to try next. If they seem stuck or unsafe, tell them help is a button press away.
+If notes about this worker are given, use them (for example, a mistake they made before), but keep it short.
+The microphone is always on. If the speech is not meant for the coach (talking to someone else, singing,
+background noise, half a word), reply with exactly: (silent)
 Plain text only, no lists."""
 
 VIDEO_SYSTEM = """You turn a supervisor's narrated demonstration video into step lists for a job coach app.
@@ -112,6 +119,8 @@ Rules for every text field:
 - "done_right" describes the GOAL in terms of the objects, so a vision model can check it in ANY setting:
   no backgrounds, tables, brands, colors or positions unless they truly matter for the step.
 - "why" is one short sentence a worker can understand.
+- "praise" is 3 to 6 warm words, said when the step is done, naming what they did: "You picked up the cup!"
+- "close_look" is true only when checking the step needs small details a quick glance can miss (which way printed words face, a small label, an exact count); false when the objects show it plainly (a cup in the hand).
 - "reference_frame" is the index of the key frame that best shows the step done right.
 - "start_s" and "end_s" are the times in the video where the step happens.
 - "transcript_clean" is the transcript with obvious speech-to-text errors fixed (keep the supervisor's words).
@@ -138,11 +147,13 @@ VIDEO_SCHEMA = {
                                 "common_mistake": {"type": "string"},
                                 "correction": {"type": "string"},
                                 "why": {"type": "string"},
+                                "praise": {"type": "string"},
+                                "close_look": {"type": "boolean"},
                                 "reference_frame": {"type": "integer"},
                                 "start_s": {"type": "number"},
                                 "end_s": {"type": "number"},
                             },
-                            "required": ["instruction", "done_right", "common_mistake", "correction", "why", "reference_frame", "start_s", "end_s"],
+                            "required": ["instruction", "done_right", "common_mistake", "correction", "why", "praise", "close_look", "reference_frame", "start_s", "end_s"],
                             "additionalProperties": False,
                         },
                     },
@@ -232,6 +243,8 @@ Answer:
   "unclear" = the objects are hidden or too blurry to judge.
   Telling someone they made a mistake when they did not is the worst outcome. If unsure, do not say mistake.
 - "confidence": 0 to 1. "reason": under 15 words, plain language.
+- "hint": the one next small action that gets the worker closer to finishing step {n}, based on what you see,
+  as one short kind sentence (first-grade reading level). Example: "Turn the sleeve so the words are on top."
 - For "mistake" only: "box_2d" = [ymin, xmin, ymax, xmax] around the problem object in the WORKER photo,
   scaled 0 to 1000; "fix" = one short, kind sentence saying what to do (first-grade reading level, never
   "wrong" or "no"). Otherwise "box_2d": [] and "fix": ""."""
@@ -246,7 +259,8 @@ LIVE_SCHEMA = {
         "reason": {"type": "string"},
         "box_2d": {"type": "array", "items": {"type": "integer"}},
         "fix": {"type": "string"},
+        "hint": {"type": "string"},
     },
-    "required": ["seen", "done_through", "status", "confidence", "reason", "box_2d", "fix"],
+    "required": ["seen", "done_through", "status", "confidence", "reason", "box_2d", "fix", "hint"],
     "additionalProperties": False,
 }

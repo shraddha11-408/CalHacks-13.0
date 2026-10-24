@@ -14,8 +14,9 @@ import uuid
 from dataclasses import dataclass, field
 
 INTENTS = [
-    ("help", r"\b(help|stuck|can'?t do|cannot do)\b"),
+    ("help", r"\b(help|can'?t do|cannot do|get my supervisor)\b"),
     ("check", r"\b(is (this|it|that) (correct|right|ok|okay|good)|did i do it|check|done|finished|i'?m done)\b"),
+    ("stuck", r"\b(stuck|i don'?t (know|get it|understand)|confused|how do i( do)? (this|it))\b"),
     ("why", r"\bwhy\b"),
     ("repeat", r"\b(again|repeat|say that|what did you say|didn'?t hear)\b"),
     ("next", r"\b(what'?s next|next|what now|what do i do)\b"),
@@ -28,6 +29,10 @@ def intent_of(said: str) -> str:
         if re.search(pat, s):
             return name
     return "open"
+
+
+def _words(s: str) -> set[str]:
+    return set(re.findall(r"[a-z']+", s.lower()))
 
 
 def spoken_tip(correction: str) -> str:
@@ -54,6 +59,11 @@ class CoachSession:
     done_through: int = 0  # live check: steps the model saw finished (1-based), for skipping ahead
     mistake_streak: int = 0
     last_correction_at: float = -1e9
+    step_started_at: float = field(default_factory=time.monotonic)  # for "stuck" guidance
+    stuck_level: int = 0
+    praise_i: int = 0
+    confirm_in_flight: bool = False
+    spoken: collections.deque = field(default_factory=lambda: collections.deque(maxlen=12))  # (t, text) the app said
     last_done_at: float = 0.0
 
     @property
@@ -104,6 +114,38 @@ class CoachSession:
         self.unclear += 1
         return self.unclear >= escalate_after
 
+    def new_step(self) -> None:
+        """Restart the stuck timer (advance, or the worker moved by hand)."""
+        self.step_started_at = time.monotonic()
+        self.stuck_level = 0
+
+    def stuck_due(self, now: float, after_s: list[float]) -> int | None:
+        """Next stuck level whose time has come (0, 1, 2…), or None. Each level fires once per step."""
+        if self.stuck_level < len(after_s) and now - self.step_started_at >= after_s[self.stuck_level]:
+            self.stuck_level += 1
+            return self.stuck_level - 1
+        return None
+
+    def note_spoken(self, texts: list[str], now: float | None = None) -> None:
+        t = time.monotonic() if now is None else now
+        for x in texts:
+            if x:
+                self.spoken.append((t, x))
+
+    def is_echo(self, said: str, now: float | None = None, window_s: float = 20.0) -> bool:
+        """The always-on mic heard the app's own voice: most of the words match something said recently."""
+        t = time.monotonic() if now is None else now
+        heard = _words(said)
+        if not heard:
+            return True
+        for at, text in self.spoken:
+            if t - at > window_s:
+                continue
+            ours = _words(text)
+            if ours and len(heard & ours) / len(heard) >= 0.7:
+                return True
+        return False
+
     def advance(self) -> bool:
         """Move to the next step. Returns True when the task is finished."""
         self.unclear = 0
@@ -111,6 +153,7 @@ class CoachSession:
         self.done_through = 0
         self.mistake_streak = 0
         self.last_correction_at = -1e9
+        self.new_step()
         self.snapshots.clear()
         if self.step_index + 1 >= len(self.steps):
             self.finished = True

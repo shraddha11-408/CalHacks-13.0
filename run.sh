@@ -35,7 +35,9 @@ fi
 
 (cd "$ROOT/edge" && exec "$ROOT/.venv/bin/uvicorn" stepwise_edge.main:app --host 127.0.0.1 --port 8000 --reload) &
 pids+=($!)
-(cd "$ROOT/web" && exec npm run dev -- --host 127.0.0.1 --port 5173 --strictPort) &
+# WEB_HOST=0.0.0.0 ./run.sh  → buddy phones on the same network can open http://<laptop-ip>:5173/buddy
+# (the web server also proxies SpacetimeDB and the edge API, so phones need only this one address)
+(cd "$ROOT/web" && exec npm run dev -- --host "${WEB_HOST:-127.0.0.1}" --port 5173 --strictPort) &
 pids+=($!)
 
 echo "edge: http://localhost:8000/health   web: http://localhost:5173"

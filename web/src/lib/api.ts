@@ -22,6 +22,8 @@ export interface Task {
   steps: Step[]
   frames?: string[]
   saved?: boolean
+  /** consented clone of the supervisor's voice (Cartesia), if any */
+  voice?: { id: string; name: string; consent_by: string; consent_at: number } | null
 }
 
 export interface VideoAnalysis {
@@ -44,9 +46,10 @@ export interface VideoJob {
   job_id: string
   video_id: string
   name: string
-  stage: 'queued' | 'transcribing' | 'key_frames' | 'claude' | 'saving' | 'recording_voice' | 'done' | 'failed'
+  stage: 'queued' | 'transcribing' | 'cloning_voice' | 'key_frames' | 'claude' | 'saving' | 'recording_voice' | 'done' | 'failed'
   stages_ms: Record<string, number>
   error: string | null
+  voice_error?: string | null
   result: VideoAnalysis | null
 }
 
@@ -94,6 +97,10 @@ export interface CheckResult {
   step_index?: number
   /** mistake seen again inside the 10 s cooldown: not spoken, not logged as a new mistake */
   repeat?: boolean
+  /** the next small action for this step, from what the camera sees */
+  hint?: string
+  /** "stuck": this answer is stuck guidance */
+  coach?: string
 }
 
 export interface ReportStats {
@@ -121,6 +128,14 @@ export interface WorkerReport {
   report: { summary: string; strengths: string[]; needs_support: string[]; improvement: string; recommendations: string[]; for_worker: string } | null
   latency_ms: number
   generated_at: number
+}
+
+export interface Progress {
+  text: string
+  say: Say[]
+  numbers: { task: string; total_steps: number; steps_done: number; by_self: number; corrections: number; minutes: number | null; times_done: number; last_time: { by_self: number; corrections: number; minutes: number | null } | null }
+  memory: string[]
+  worded_by: string
 }
 
 export interface TalkResult {
@@ -163,6 +178,7 @@ export const api = {
   goto: (sid: string, index: number) => post<StepPayload>(`/coach/${sid}/goto`, { index }),
   locate: (sid: string, image: string, reason: string) => post<{ box: number[] | null; fix: string; latency_ms: number }>(`/coach/${sid}/locate`, { image, reason }),
   end: (sid: string) => post<{ ok: boolean }>(`/coach/${sid}/end`, {}),
+  progress: (sid: string) => fetch(`/api/coach/${sid}/progress`).then(j<Progress>),
   talk: (sid: string, audio: Blob, image: string) => {
     const f = new FormData()
     f.append('audio', audio, audio.type.includes('mp4') ? 'talk.mp4' : 'talk.webm')
@@ -173,10 +189,12 @@ export const api = {
   videoDemo: () => fetch('/api/videos/demo').then(j<{ available: boolean; url?: string; name?: string; duration?: number }>),
   videos: () => fetch('/api/videos').then(j<{ video_id: string; name: string; created_at: number; tasks: { task_id: string; title: string; steps: number }[] }[]>),
   video: (id: string) => fetch(`/api/videos/${id}`).then(j<VideoAnalysis>),
-  analyzeDemo: () => post<VideoJob>('/videos/analyze-demo', {}),
-  uploadVideo: (file: File) => {
+  /** consentBy: the supervisor's name when they agreed to have their voice cloned from the video */
+  analyzeDemo: (consentBy = '') => post<VideoJob>('/videos/analyze-demo', { consent_by: consentBy }),
+  uploadVideo: (file: File, consentBy = '') => {
     const f = new FormData()
     f.append('file', file, file.name)
+    f.append('consent_by', consentBy)
     return fetch('/api/videos/upload', { method: 'POST', body: f }).then(j<VideoJob>)
   },
   videoJob: (id: string) => fetch(`/api/videos/jobs/${id}`).then(j<VideoJob>),
