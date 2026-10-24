@@ -4,7 +4,7 @@
 devices:
   # MVP: the browser owns the webcam (MediaPipe). Set true to also run the edge ArUco pipeline.
   edge_camera: false
-  # webcam = laptop webcam (OpenCV). pi_stream = Pi 5 + OV5647 MJPEG stream.
+  # webcam = laptop webcam (OpenCV). pi_stream = Pi 5 + Brio 100 UVC MJPEG stream (hardware/camera/uvc_streamer.py).
   # file = loop an image/video (file_path) for tests and eval clips.
   camera: webcam
   webcam_index: 0
