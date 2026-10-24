@@ -14,6 +14,9 @@ Code for the glasses (Pi 5 camera and touch sensor) and the wrist node (Uno Q). 
 | `camera/pi_streamer.py` | Runs on the Pi 5: Picamera2 -> MJPEG over HTTP, and mirrors the GPIO14 touch sensor |
 | `camera/mjpeg_http.py` | Stdlib HTTP server shared by the streamer and the test server (`/stream`, `/snapshot.jpg`, `/health`, `/touch`, `/touch/events`) |
 | `camera/receiver.py` | Laptop side: reads the stream, prints fps, frame gap p50/p99, decode time (`--show` for a preview window) |
+| `camera/rectify.py` | `rectify(frame, marker_ids)` -> top-down tray image, or `None` if a marker is missing. Also a CLI for checking a snapshot |
+| `camera/aruco_markers.py` | Generates printable ArUco markers (DICT_4X4_50, ids 0-3) into `camera/markers/` |
+| `camera/test_rectify.py` | Rectify tests on synthetic camera views (tilt, rotation, missing markers, latency) |
 | `camera/touch_monitor.py` | Laptop side: prints touch down/up events from the Pi |
 | `camera/fake_server.py`, `camera/test_stream.py` | Pi stand-in and unit tests (no Pi needed) |
 
@@ -71,6 +74,19 @@ cd hardware/camera && python3 -m venv .venv
 
 The server keeps only the newest frame, so a slow client skips frames instead of building up lag. Any number of clients can connect. `/snapshot.jpg` returns one JPEG; `/health` returns `ok` once frames are flowing.
 
+## ArUco markers and rectify
+
+Print `camera/markers/tray_markers_a4.png` at **100% scale** (no "fit to page") and check one marker edge with a ruler: it should be 7 cm. Regenerate at another size with `python3 aruco_markers.py --size-cm 6`. Stick them on the tray corners: **0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left**, flat, with their white border left intact.
+
+```bash
+.venv/bin/python rectify.py http://<pi-ip>:8000/snapshot.jpg --out tray.jpg   # markers seen + saved top-down view
+.venv/bin/python -m unittest test_rectify -v
+```
+
+- The rectified view (default 640x480) spans the rectangle between the four marker **centers**. Keep the slots inside it.
+- All four markers must be visible. Otherwise `rectify()` returns `None` and the caller says "Look at the tray, please" and does not check.
+- Synthetic scenes: detect + rectify takes about 1.5 ms (budget 50 ms, AGENTS.md §6). Not yet measured on a real tray; marker size at 40-60 cm distance is the thing to confirm first.
+
 ## Touch sensor (Pi 5, GPIO14)
 
 A digital touch sensor (for example a TTP223 module) on **BCM GPIO14** (header pin 8).
@@ -89,6 +105,7 @@ A digital touch sensor (for example a TTP223 module) on **BCM GPIO14** (header p
 
 ## Known gaps
 
+- Rectify is tested on synthetic views only. Run `rectify.py` against a live snapshot with the printed markers on the tray before relying on it.
 - **Transport differs from AGENTS.md.** §14 plans for the Uno Q to POST `/help` to the edge app over Wi-Fi and receive `/status` back. This prototype uses USB serial to the laptop. It is fine for bring-up; switch to Wi-Fi if the wrist node must be untethered.
 - `PORT` is hardcoded to one machine. Make it an env var or CLI argument before sharing.
 - The LED matrix shows a solid fill or blank. Distinct patterns for *help sent*, *help claimed* and *step done* (§14) are not built yet.
