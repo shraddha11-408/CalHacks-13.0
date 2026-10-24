@@ -1,7 +1,14 @@
-import serial
+import sys
 import time
 
-PORT = "/dev/cu.usbmodem638911932"
+import serial
+
+from uno_port import find_port
+
+PORT = find_port()
+if PORT is None:
+    sys.exit("No Uno Q serial port found. Plug it in, or set UNO_PORT (for example UNO_PORT=COM5 on Windows).")
+print("using", PORT)
 
 ser = serial.Serial(PORT, 115200, timeout=0.1)
 
