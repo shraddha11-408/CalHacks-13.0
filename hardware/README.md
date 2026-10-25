@@ -14,7 +14,7 @@ The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in U
 | `uno_q/wrist_node/wrist_node.ino` | Arduino sketch (MCU side): debounces the touch input, reports touches, drives the LED matrix |
 | `backend/uno_serial_bridge.py` | Laptop-side Python script: reads touch events over USB serial, classifies hold length, sends LED commands back |
 | `camera/uvc_streamer.py` | Runs on the Pi 5: USB webcam -> MJPEG over HTTP (ffmpeg copies the camera's MJPEG, no re-encode) |
-| `record.py` | Records the Pi's video and microphone into one MP4 (+ a `.json` label file) on this laptop; needs ffmpeg |
+| `rec.sh`, `record.py` | `./rec.sh -s <seconds> -t <countdown>` records the Pi's video and microphone into one MP4 (+ a `.json` label file) on this laptop; needs ffmpeg |
 | `sync_check.py` | Measures how far the picture lags the sound in a clap recording and suggests `--av-offset` |
 | `doctor.py`, `start.sh` | One-command check of the whole chain (see TESTING.md) |
 | `camera/mjpeg_http.py` | Stdlib HTTP server shared by the streamer and the test servers (`/stream`, `/snapshot.jpg`, `/health`, `/audio`) |
@@ -110,8 +110,10 @@ The server keeps only the newest frame, so a slow client skips frames instead of
 ## Recording video with sound (laptop)
 
 ```bash
-.venv/bin/python record.py                                  # until Ctrl-C, into recordings/<time>.mp4
-.venv/bin/python record.py --seconds 20 --label correct --step s1
+./rec.sh -s 10                    # record 10 seconds into recordings/<time>.mp4
+./rec.sh -s 10 -t 5               # count down 5 seconds first (-t), then record 10 (-s)
+./rec.sh                          # until Ctrl-C
+./rec.sh -s 20 -t 3 --label correct --step s1
 .venv/bin/python sync_check.py recordings/<clip>.mp4        # after clapping 3 times in view: picture-vs-sound offset
 ```
 

@@ -1,9 +1,12 @@
 """Record the Pi's live video and microphone into one MP4 on this laptop.
 
-  ./start.sh                              # first: check the Pi is streaming
-  .venv/bin/python record.py              # record until Ctrl-C into recordings/<time>.mp4
-  .venv/bin/python record.py --seconds 20 --label correct --step s1
-  .venv/bin/python record.py --seconds 20 --label wrong_slot --step s3 --out recordings/lotion_wrong.mp4
+  ./rec.sh -s 10                          # record 10 seconds
+  ./rec.sh -s 10 -t 5                     # count down 5 seconds first, then record 10
+  ./rec.sh                                # record until Ctrl-C
+  ./rec.sh -s 20 -t 3 --label wrong_slot --step s3 --out recordings/lotion_wrong.mp4
+
+-s / --seconds  how long to record (default: until Ctrl-C)
+-t / --timer    seconds to count down before recording starts, so you can get into position
 
 Needs ffmpeg (macOS: brew install ffmpeg). Each recording gets a .json next to it with the label
 and settings, for the eval clips (AGENTS.md section 16). Video is 480x640 portrait, about 15 fps.
@@ -72,19 +75,37 @@ def write_sidecar(out, host, label, step, started, seconds_recorded, av_offset, 
     return meta
 
 
-def main():
+def countdown(n, say=print, sleep=time.sleep):
+    """Print n, n-1, ... 1, one per second, with a terminal bell so you can hear it start."""
+    for i in range(int(n), 0, -1):
+        say(f"\a  starting in {i} ...", flush=True)
+        sleep(1)
+
+
+def parse_args(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--host", default="10.12.194.1")
-    ap.add_argument("--seconds", type=float, help="stop after this long (default: until Ctrl-C)")
+    ap.add_argument("-s", "--seconds", type=float, help="stop after this long (default: until Ctrl-C)")
+    ap.add_argument("-t", "--timer", type=float, default=0, metavar="SECONDS",
+                    help="count down this many seconds before recording starts")
     ap.add_argument("--out", help="output .mp4 (default recordings/<time>.mp4)")
     ap.add_argument("--label", help="for eval clips, for example correct or wrong_slot")
     ap.add_argument("--step", help="step id, for example s1")
     ap.add_argument("--no-audio", action="store_true")
     ap.add_argument("--av-offset", type=float, default=AV_OFFSET_S, help="seconds to delay audio (default %(default)s)")
-    a = ap.parse_args()
+    a = ap.parse_args(argv)
+    if a.seconds is not None and a.seconds <= 0:
+        ap.error("-s must be greater than 0")
+    if a.timer < 0:
+        ap.error("-t must be 0 or more")
+    return a
 
+
+def main():
+    a = parse_args()
     if not check_pi(a.host):
         sys.exit(f"The Pi at {a.host} is not streaming. Plug in its USB-C cable and run ./start.sh first.")
+    countdown(a.timer)
     out = Path(a.out) if a.out else HERE / "recordings" / (datetime.now().strftime("%Y%m%d_%H%M%S") + ".mp4")
     out.parent.mkdir(parents=True, exist_ok=True)
     started = datetime.now().isoformat(timespec="seconds")

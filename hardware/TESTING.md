@@ -43,7 +43,7 @@ From `hardware/camera` (use `../.venv/bin/python`):
 | Microphone | `python audio_receiver.py http://10.12.194.1:8000/audio --seconds 10 --save a.wav` | 1.00x realtime, no clipping; play `a.wav` and check you can hear and understand yourself |
 | Live level | `python audio_receiver.py http://10.12.194.1:8000/audio --meter` | bars move when you talk |
 | Wrist node | `cd ../backend && ../.venv/bin/python uno_serial_bridge.py` | see "Wrist node" |
-| Record video + sound | `cd .. && .venv/bin/python record.py --seconds 10` | `recordings/<time>.mp4` with a video and an audio track (needs ffmpeg) |
+| Record video + sound | `cd .. && ./rec.sh -s 10 -t 3` (-s seconds to record, -t countdown first) | `recordings/<time>.mp4` with a video and an audio track (needs ffmpeg) |
 | Everything at once | `./start.sh` (from `hardware/`) | `ALL GOOD` |
 
 Use the audio in your own code: `from audio_receiver import iter_pcm` then `for pcm, t in iter_pcm("http://10.12.194.1:8000/audio"): ...`. `pcm` is a numpy int16 array of 100 ms at 16 kHz mono. The Pi sends it in bursts of about 125 ms.

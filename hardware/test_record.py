@@ -1,5 +1,6 @@
 """Run: python3 -m unittest test_record   (from hardware/; needs ffmpeg and ffprobe)"""
 import json
+import re
 import subprocess
 import tempfile
 import unittest
@@ -39,6 +40,40 @@ class CommandTest(unittest.TestCase):
         c = self.cmd(seconds=7)
         self.assertEqual(c[c.index("-t") + 1], "7")
         self.assertNotIn("-t", self.cmd())
+
+
+class ArgsTest(unittest.TestCase):
+    def test_short_flags(self):
+        a = record.parse_args(["-s", "10", "-t", "3"])
+        self.assertEqual((a.seconds, a.timer), (10, 3))
+
+    def test_long_flags_still_work(self):
+        a = record.parse_args(["--seconds", "7.5", "--timer", "2"])
+        self.assertEqual((a.seconds, a.timer), (7.5, 2))
+
+    def test_defaults_record_until_ctrl_c_with_no_countdown(self):
+        a = record.parse_args([])
+        self.assertIsNone(a.seconds)
+        self.assertEqual(a.timer, 0)
+
+    def test_bad_values_are_rejected(self):
+        for argv in (["-s", "0"], ["-s", "-5"], ["-t", "-1"]):
+            with self.subTest(argv=argv), self.assertRaises(SystemExit):
+                record.parse_args(argv)
+
+
+class CountdownTest(unittest.TestCase):
+    def test_counts_down_one_per_second(self):
+        said, slept = [], []
+        record.countdown(3, say=lambda m, **k: said.append(m), sleep=slept.append)
+        self.assertEqual(len(said), 3)
+        self.assertEqual([re.search(r"\d+", m).group() for m in said], ["3", "2", "1"])
+        self.assertEqual(slept, [1, 1, 1])
+
+    def test_zero_timer_does_nothing(self):
+        said = []
+        record.countdown(0, say=lambda m, **k: said.append(m), sleep=lambda s: self.fail("slept"))
+        self.assertEqual(said, [])
 
 
 class SidecarTest(unittest.TestCase):
