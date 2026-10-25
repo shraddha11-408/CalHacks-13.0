@@ -20,20 +20,39 @@ This file is the source of truth for anyone (human or agent) writing code in thi
 >   low confidence twice. No Droid-compiled tier in the MVP.
 >   **Temporary (2026-10-24):** Bitdeer is paused in the live check (p50 ~4–8 s was too slow to follow
 >   a worker). The Steps page streams continuously (a frame every 0.6 s, 2 checks in flight, no waiting
->   for a hand pause). `edge/stepwise_edge/live_vision.py`: Claude Haiku watches the stream; Claude
->   Sonnet takes the confirming second look, so a step advances (or is corrected) only when it agrees.
->   Each call sees the whole step list and returns status, `done_through` and the mistake box. Automatic
->   checks never escalate to Opus. Gemini is wired (`live_vision: auto`) but our key hits its free quota.
->   **Debounce deviation (§6), for speed:** a step marked `close_look` at teach time (success hides in small
->   details, e.g. which way printed words face) advances when Sonnet confirms Haiku's "done" on the same
->   frame, immediately; other steps advance on two Haiku "done"s ≥ 0.6 s apart. Corrections keep the
->   2-in-a-row rule, plus a 3 s grace after each new step and a 10 s cooldown.
->   The Bitdeer call is commented out in `api.run_check`; numbers in `eval/results/live_fast.json`.
+>   for a hand pause). **Live check = one model, Claude Sonnet, on every frame**
+>   (`edge/stepwise_edge/live_vision.py`, `models.claude_live`): each call sees the whole step list and returns
+>   status, `done_through`, the mistake box and fix. The Haiku/Sonnet split, Gemini and the Opus escalation
+>   were removed from the live path for simplicity and mistake recall (Haiku caught 0% of the sleeve mistakes).
+>   **Debounce (§6):** automatic checks advance on 2 dones ≥ 0.6 s apart and correct on 2 mistakes in a row
+>   (3 s grace after each new step, 10 s cooldown); 1 look is enough when the worker asks (voice, button, stuck).
+>   An unclear answer to "is this correct?" gets the "not sure" phrase. The Bitdeer call is commented out in
+>   `api.run_check`; numbers in `eval/results/live_fast.json`.
 > - **Database:** SpacetimeDB replaces Convex (no Convex key). Photos live on the edge laptop; rows hold their paths.
 > - **Talk:** Nemotron Omni is not in our Bitdeer catalog → Cartesia STT → intent → answer → Cartesia TTS.
 > - **Memory:** Moss holds plain-language notes about each worker (mistakes, preferences), queried before each step.
 > - **Privacy:** faces blurred in the browser before any frame leaves it; no video recorded or stored.
-> - **Out of MVP:** fading support, buddy routing, voice cloning, Factory, Apify, Notability.
+> - **Out of MVP:** Factory, Apify, Notability.
+> - **Added after the MVP cut (2026-10-24):** fading support, buddy routing with 20 s escalation, consented
+>   voice cloning. SpacetimeDB is the authority for fading: `mastery` (level per worker × step),
+>   `record_step_outcome` (edge-only reducer, §10 rules in one transaction), `set_support_level`
+>   (supervisor-only), `step_outcome` history, `level_change` event table, per-identity `my_mastery` view,
+>   `device` roles + presence (lifecycle hooks, heartbeat, scheduled sweep), scheduled `escalate_help` and
+>   `rollup`. Checks: `scripts/stdb_module_check.py` (separate test database).
+> - **Voice agent (2026-10-24):** "Talk with ⟨coach⟩" on the worker screen opens a Cartesia Managed Agent
+>   (model `claude-haiku-5.5` in Cartesia's catalog, the task's consented cloned voice) straight from the browser
+>   with a short-lived agent token; the API key stays on the edge (`edge/stepwise_edge/agent.py`, one agent per
+>   voice, definition in code). Its six client tools (`what_is_my_step`, `check_my_work`, `call_a_helper`,
+>   `my_progress`, `change_step`, `remember`) run on the edge app (`/coach/{sid}/agent/tool`). Browser tokens
+>   cannot send dynamic variables, so the agent gets the worker and task from its first tool call. SpacetimeDB:
+>   `agent_call` (owned by the screen's identity), private `agent_turn` / `agent_tool_call` read only through the
+>   supervisor-only views `supervisor_transcript` / `supervisor_tool_calls`, `coach_end_call` (supervisor ends a
+>   call; the screen hangs up), `agent_stats` rollup (measured response p50/p90). Checks: `scripts/agent_smoke.py`.
+> - **Voice agent off the worker page (2026-10-24):** the Cartesia agent never sees the camera (its tools return
+>   text only), so "What am I holding?" failed. The worker talks through the always-on mic again: Cartesia STT →
+>   fixed intents (check, help, stuck, why, repeat, next) or Claude (`claude_answer`) with the live camera frame, the last
+>   4 exchanges and the live check's latest result → Cartesia TTS in the coach's cloned voice (`/coach/{sid}/talk`).
+>   The agent code (`agent.py`, `/coach/{sid}/agent*`, Layer E tables) stays for later but nothing calls it.
 > - **Hardware:** laptop webcam/mic/speaker; on-screen button + spacebar stands in for the temple button.
 
 ---

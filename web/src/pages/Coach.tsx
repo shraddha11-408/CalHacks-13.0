@@ -7,6 +7,7 @@ import { api, type CheckResult, type PublicConfig, type StepPayload, type TalkRe
 import { AudioQueue, apiUrl, type Say } from '../lib/audio'
 import { TriggerEngine, type TriggerState } from '../lib/triggers'
 import { grab, snapshot, type FrameRing } from '../lib/vision'
+import { getMedia } from '../lib/media'
 
 const PHASE_WORD = { no_hands: 'No hands', moving: 'Hands moving', still: 'Hands still', busy: 'Checking…' } as const
 const HOLD_FOR_HELP_MS = 1000
@@ -206,7 +207,7 @@ export function CoachPage() {
   const startTalk = useCallback(async () => {
     if (!sidRef.current || rec.current?.state === 'recording') return
     try {
-      mic.current ??= await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
+      mic.current ??= await getMedia({ audio: { echoCancellation: true, noiseSuppression: true } })
     } catch {
       setError('Microphone blocked. Allow the mic for this site to use Talk. The Help button always works.')
       return

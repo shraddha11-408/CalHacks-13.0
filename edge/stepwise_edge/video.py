@@ -26,7 +26,7 @@ log = logging.getLogger("stepwise.video")
 
 YUNET = Path(__file__).resolve().parents[2] / "models" / "face_detection_yunet_2023mar.onnx"
 FRAME_W = 768
-N_FRAMES = 16
+N_FRAMES = 24  # finer steps need denser key frames (one action per step)
 
 
 def probe(path: Path) -> dict:

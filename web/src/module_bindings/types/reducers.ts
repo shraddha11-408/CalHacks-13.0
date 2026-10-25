@@ -6,27 +6,47 @@
 import { type Infer as __Infer } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AgentCallEndReducer from "../agent_call_end_reducer";
+import AgentCallStartReducer from "../agent_call_start_reducer";
+import AgentToolLogReducer from "../agent_tool_log_reducer";
+import AgentTurnLogReducer from "../agent_turn_log_reducer";
 import ClaimHelpReducer from "../claim_help_reducer";
+import CoachEndCallReducer from "../coach_end_call_reducer";
 import DeleteTaskReducer from "../delete_task_reducer";
 import EndSessionReducer from "../end_session_reducer";
+import EnsureSchedulesReducer from "../ensure_schedules_reducer";
+import HeartbeatReducer from "../heartbeat_reducer";
 import LogStepEventReducer from "../log_step_event_reducer";
 import LogTalkReducer from "../log_talk_reducer";
+import RecordStepOutcomeReducer from "../record_step_outcome_reducer";
+import RegisterDeviceReducer from "../register_device_reducer";
 import RequestHelpReducer from "../request_help_reducer";
 import ResolveHelpReducer from "../resolve_help_reducer";
 import SaveTaskReducer from "../save_task_reducer";
 import SetStepReducer from "../set_step_reducer";
+import SetSupportLevelReducer from "../set_support_level_reducer";
 import StartSessionReducer from "../start_session_reducer";
 import UpsertWorkerReducer from "../upsert_worker_reducer";
 
+export type AgentCallEndParams = __Infer<typeof AgentCallEndReducer>;
+export type AgentCallStartParams = __Infer<typeof AgentCallStartReducer>;
+export type AgentToolLogParams = __Infer<typeof AgentToolLogReducer>;
+export type AgentTurnLogParams = __Infer<typeof AgentTurnLogReducer>;
 export type ClaimHelpParams = __Infer<typeof ClaimHelpReducer>;
+export type CoachEndCallParams = __Infer<typeof CoachEndCallReducer>;
 export type DeleteTaskParams = __Infer<typeof DeleteTaskReducer>;
 export type EndSessionParams = __Infer<typeof EndSessionReducer>;
+export type EnsureSchedulesParams = __Infer<typeof EnsureSchedulesReducer>;
+export type HeartbeatParams = __Infer<typeof HeartbeatReducer>;
 export type LogStepEventParams = __Infer<typeof LogStepEventReducer>;
 export type LogTalkParams = __Infer<typeof LogTalkReducer>;
+export type RecordStepOutcomeParams = __Infer<typeof RecordStepOutcomeReducer>;
+export type RegisterDeviceParams = __Infer<typeof RegisterDeviceReducer>;
 export type RequestHelpParams = __Infer<typeof RequestHelpReducer>;
 export type ResolveHelpParams = __Infer<typeof ResolveHelpReducer>;
 export type SaveTaskParams = __Infer<typeof SaveTaskReducer>;
 export type SetStepParams = __Infer<typeof SetStepReducer>;
+export type SetSupportLevelParams = __Infer<typeof SetSupportLevelReducer>;
 export type StartSessionParams = __Infer<typeof StartSessionReducer>;
 export type UpsertWorkerParams = __Infer<typeof UpsertWorkerReducer>;
 

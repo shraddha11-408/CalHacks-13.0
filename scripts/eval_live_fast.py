@@ -1,6 +1,6 @@
-"""Fast live check (live_vision: Gemini Flash / Claude Haiku) on the same labeled frames as
+"""Live check (live_vision: Claude, models.claude_live) on the same labeled frames as
 eval_live_prompt.py, so the numbers compare with Bitdeer. Writes eval/results/live_fast.json.
-Run: .venv/bin/python scripts/eval_live_fast.py [claude] [gemini]
+Run: .venv/bin/python scripts/eval_live_fast.py [claude[:model[:effort]]] ...
 """
 import json
 import sys
@@ -72,11 +72,11 @@ def run_one(models, c):
 report = []
 for arg in [a for a in sys.argv[1:] if not a.startswith("--")] or ["claude"]:  # provider[:model[:effort-or-thinking-level]]
     prov, model, level = (arg.split(":") + [None, None])[:3]
-    models = {**M, "live_vision": prov}
+    models = {**M, "live_vision": "claude"}  # Claude is the only live provider now
     if model:
-        models["gemini_live" if prov == "gemini" else "claude_live"] = model
+        models["claude_live"] = model
     if level:
-        models["gemini_thinking" if prov == "gemini" else "claude_live_effort"] = level
+        models["claude_live_effort"] = level
     if "--ref" in sys.argv:
         models["live_send_ref"] = True
     with ThreadPoolExecutor(4) as ex:
@@ -88,7 +88,7 @@ for arg in [a for a in sys.argv[1:] if not a.startswith("--")] or ["claude"]:  #
     false_corr = sum(r["got"] == "mistake" and r["truth"] != "mistake" for r in rows) / n
     lat = sorted(r["ms"] for r in rows if r["ms"])
     p50, p90 = (lat[len(lat) // 2], lat[int(len(lat) * 0.9)]) if lat else (None, None)
-    name = ("ref · " if models.get("live_send_ref") else "") + f"{prov} ({models['gemini_live'] if prov == 'gemini' else models['claude_live']}, {models['gemini_thinking'] if prov == 'gemini' else models['claude_live_effort']})"
+    name = ("ref · " if models.get("live_send_ref") else "") + f"claude ({models['claude_live']}, {models['claude_live_effort']})"
     report.append({"config": name, "accuracy": acc, "done_recognized": done_hit, "mistakes_caught": mis_hit, "false_corrections": false_corr, "p50_ms": p50, "p90_ms": p90, "errors": sum(r["got"] == "error" for r in rows), "rows": rows})
     print(f"{name:34} acc {acc:4.0%} | done seen {done_hit:4.0%} | mistakes caught {mis_hit:4.0%} | false corr {false_corr:4.0%} | p50 {p50} ms p90 {p90} ms | errors {report[-1]['errors']}", flush=True)
 

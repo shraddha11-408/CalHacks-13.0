@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, type PointerEvent as RPointerEvent } from 
 import type { Area, Pt } from '../lib/triggers'
 import type { HandLandmarker } from '@mediapipe/tasks-vision'
 import { detectHands, FrameRing, loadHands } from '../lib/vision'
+import { getMedia } from '../lib/media'
 
 const AREA_KEY = 'stepwise-work-area'
 const CAM_KEY = 'stepwise-camera'
@@ -34,12 +35,15 @@ export function CameraStage({
   videoRef,
   overlay,
   editable = true,
+  file = null,
 }: {
   onFrame?: (f: FrameInfo) => void
   ringRef?: React.MutableRefObject<FrameRing | null>
   videoRef?: React.MutableRefObject<HTMLVideoElement | null>
   overlay?: React.ReactNode
   editable?: boolean
+  /** a recorded video plays in place of the camera (demo: the worker uploads one per task) */
+  file?: File | null
 }) {
   const video = useRef<HTMLVideoElement | null>(null)
   const canvas = useRef<HTMLCanvasElement | null>(null)
@@ -56,6 +60,7 @@ export function CameraStage({
     }
   })
   const [status, setStatus] = useState<'starting' | 'ok' | 'denied' | 'error'>('starting')
+  const [ended, setEnded] = useState(false)
   const [err, setErr] = useState('')
   const onFrameRef = useRef(onFrame)
 
@@ -71,13 +76,25 @@ export function CameraStage({
     }
   }, [area])
 
-  // camera
+  // camera, or the uploaded video
   useEffect(() => {
     let stream: MediaStream | null = null
     let cancelled = false
+    let url = ''
+    setEnded(false)
     ;(async () => {
       try {
-        stream = await navigator.mediaDevices.getUserMedia({
+        if (file) {
+          const v = video.current!
+          url = URL.createObjectURL(file)
+          v.srcObject = null
+          v.src = url
+          v.onended = () => setEnded(true)
+          await v.play()
+          setStatus('ok')
+          return
+        }
+        stream = await getMedia({
           video: deviceId ? { deviceId: { exact: deviceId }, width: 1280, height: 720 } : { width: 1280, height: 720 },
           audio: false,
         })
@@ -86,7 +103,7 @@ export function CameraStage({
         v.srcObject = stream
         await v.play()
         setStatus('ok')
-        setDevices((await navigator.mediaDevices.enumerateDevices()).filter((d) => d.kind === 'videoinput'))
+        setDevices((await navigator.mediaDevices?.enumerateDevices() ?? []).filter((d) => d.kind === 'videoinput'))
       } catch (e) {
         const name = (e as Error).name
         setStatus(name === 'NotAllowedError' ? 'denied' : 'error')
@@ -96,8 +113,17 @@ export function CameraStage({
     return () => {
       cancelled = true
       stream?.getTracks().forEach((t) => t.stop())
+      if (url) {
+        const v = video.current
+        if (v) {
+          v.pause()
+          v.removeAttribute('src')
+          v.load()
+        }
+        URL.revokeObjectURL(url)
+      }
     }
-  }, [deviceId])
+  }, [deviceId, file])
 
   // hand loop
   useEffect(() => {
@@ -169,9 +195,27 @@ export function CameraStage({
           <span>Work area</span>
         </div>
         {overlay}
+        {file && ended && (
+          <div className="cam-msg" role="status">
+            Video ended.{' '}
+            <button
+              className="btn btn-secondary btn-sm"
+              onClick={() => {
+                setEnded(false)
+                const v = video.current
+                if (v) {
+                  v.currentTime = 0
+                  void v.play()
+                }
+              }}
+            >
+              ▶ Play again
+            </button>
+          </div>
+        )}
         {status !== 'ok' && (
           <div className="cam-msg" role="status">
-            {status === 'starting' && 'Starting camera…'}
+            {status === 'starting' && (file ? 'Loading video…' : 'Starting camera…')}
             {status === 'denied' && 'Camera blocked. Allow camera access for this site, then reload.'}
             {status === 'error' && `Camera error: ${err}`}
           </div>
@@ -182,7 +226,7 @@ export function CameraStage({
           <button className="btn btn-ghost" onClick={() => setEditing((v) => !v)} aria-pressed={editing}>
             {editing ? 'Drag over the table…' : '▭ Set work area'}
           </button>
-          {devices.length > 1 && (
+          {!file && devices.length > 1 && (
             <label className="row small" style={{ gap: 6 }}>
               Camera
               <select

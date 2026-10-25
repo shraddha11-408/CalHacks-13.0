@@ -31,6 +31,7 @@ coach:
   done_confirm: 2             # advance only after this many "done" answers in a row (AGENTS.md §6 debounce)
   done_min_gap_s: 0.6         # ...at least this far apart
   done_confidence: 0.75       # a "done" below this counts as unclear
+  done_sure: 0.85             # a "done" at or above this advances on one look (below: 2 looks in a row)
   low_confidence: 0.6         # below this counts as unclear
   unclear_escalate: 2         # unclear/low-confidence this many times → Claude with last 3 frames
   snapshot_px: 768            # long side of snapshots sent to models (teach key frames, coach page)
@@ -38,11 +39,12 @@ coach:
   keyframe_min_gap_s: 1.5     # teach: min time between key frames
   keyframes_max: 20
   live_interval_s: 0.5        # live stream: start a new check this often, no waiting for a pause
-  live_parallel: 3            # ...with at most this many in flight (answers for an old step are dropped)
+  live_parallel: 3            # ...with at most this many in flight (Sonnet p50 ~2.2 s; answers for an old step are dropped)
   step_grace_s: 3             # no automatic correction this soon after a new step (hand-over frames)
   mark_with: live             # who draws the on-screen mistake box: live (same call, instant) | claude (separate call, +2-4 s) | bitdeer
   live_timeout_s: 6           # a live check slower than this counts as unclear
   stuck_after_s: [15, 35, 60] # no progress on a step this long → take your time + hint, → hint + ask me, → offer help
+  stuck_scale_by_level: [1, 1.3, 2, 3]  # fading: the more independent the step, the longer before the coach steps in
   check_timeout_s: 8          # ≈ GLM p90 (7.6 s); slower checks hand over to Claude (~2 s) instead of waiting
 
 spacetimedb:
@@ -65,13 +67,10 @@ models:
   bitdeer_base_url: https://api-inference.bitdeer.ai/v1
   bitdeer_vision: zai-org/GLM-5.3-Flash   # best on the goal-based prompt: eval/results/live_prompt.json
   bitdeer_vision_alt: Qwen/Qwen3.8-27B    # runner-up
-  # Live step check. Bitdeer is paused (too slow live); a fast VLM sees the whole step list.
-  live_vision: claude               # claude | gemini | auto (gemini, Claude when Gemini is out of quota / overloaded). Our Gemini key hits its free quota (429) at stream rates.
+  # Live step check. Bitdeer keys above are for the eval scripts only (not in the live path: too slow live).
+  live_vision: claude               # one model for every live check (Sonnet below); Gemini/Haiku split removed
   live_send_ref: false              # also send the step's reference photo (one more image per call = slower)
-  gemini_live: gemini-3.6-flash     # Google AI Studio. ~1.5 s at minimal; 3.8-flash was overloaded (503) and rejects minimal
-  gemini_thinking: minimal          # minimal | low | medium | high
-  claude_live: claude-haiku-5-5    # watches the stream: fast (p50 1.7 s), finds "done" well, can't read small print
-  claude_confirm: claude-sonnet-5-5 # second look before a step advances: reads the sleeve words (44% of mistakes/frame vs Haiku 0%, p50 2.2 s). Empty = no split
+  claude_live: claude-sonnet-5-5   # every live frame: reads small printed words (p50 ~2.2 s), catches the sleeve mistakes Haiku missed
   claude_live_effort: low
   cartesia_tts: sonic-3.6           # WebSocket streaming; verified in kill-test
   cartesia_stt: ink-2               # realtime (/stt/turns/websocket); batch uses ink-whisper

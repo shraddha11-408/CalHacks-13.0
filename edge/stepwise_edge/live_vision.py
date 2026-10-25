@@ -1,45 +1,25 @@
-"""Fast live step check (stand-in for Bitdeer while we tune the coach loop).
+"""Live step check: one model, Claude Sonnet (models.claude_live), on every streamed frame.
 
 One snapshot + the WHOLE step list → which steps are finished, the current step's
-status, and (for a mistake) where it is, in a single call. Seeing every step lets the
-model map what the worker is doing to the right step, even if they move ahead quickly.
-
-Providers (config.yaml models.live_vision):
-  gemini  – Google AI Studio, GEMINI_API_KEY (google-genai SDK, generate_content)
-  claude  – Claude (models.claude_live: Sonnet reads small printed words, Haiku is faster) via ANTHROPIC_API_KEY
-  auto    – gemini when GEMINI_API_KEY is set, else claude
+status, and (for a mistake) where it is and the fix, in a single call. Seeing every step
+lets the model map what the worker is doing to the right step, even if they move ahead quickly.
 """
 from __future__ import annotations
 
 import base64
 import json
-import os
 import time
 
 from .prompts import IMAGES_NO_REF, IMAGES_WITH_REF, LIVE_PROMPT, LIVE_SCHEMA, STATUS
 
-_gemini = None
 _claude = None
-_gemini_rest_until = 0.0  # Gemini said 429 (quota) or 503 (overloaded): use Claude until then
-GEMINI_REST_S = 30
-
-
-def provider(name: str) -> str:
-    if name == "auto":
-        return "gemini" if os.getenv("GEMINI_API_KEY") and time.monotonic() >= _gemini_rest_until else "claude"
-    return name
-
-
-def _busy(e: Exception) -> bool:
-    s = str(e)
-    return any(k in s for k in ("429", "RESOURCE_EXHAUSTED", "503", "UNAVAILABLE", "DEADLINE"))
 
 
 def build_prompt(step: dict, task: dict | None, has_ref: bool) -> str:
     steps = (task or {}).get("steps", []) or [step]
     idx = next((i for i, s in enumerate(steps) if s.get("id") == step.get("id")), 0)
     lines = "\n".join(
-        f"{i + 1}. {s.get('instruction', '')}\n   Done when: {s.get('done_right', '')}\n   Common mistake: {s.get('common_mistake', '')}"
+        f"{i + 1}. {'[DONE] ' if i < idx else ''}{s.get('instruction', '')}\n   Done when: {s.get('done_right', '')}\n   Common mistake: {s.get('common_mistake', '')}"
         for i, s in enumerate(steps)
     )
     return LIVE_PROMPT.format(
@@ -88,34 +68,12 @@ def parse(d: dict, total: int) -> dict:
     }
 
 
-def _gemini_call(model: str, level: str, prompt: str, images: list[bytes]) -> dict:
-    global _gemini
-    from google import genai
-    from google.genai import types
-
-    if _gemini is None:
-        # one attempt (a stale live answer is worthless, the next frame is already coming); 10 s is the API minimum
-        _gemini = genai.Client(api_key=os.getenv("GEMINI_API_KEY"), http_options=types.HttpOptions(timeout=10000, retry_options=types.HttpRetryOptions(attempts=1)))
-    parts: list = [types.Part.from_text(text=prompt)] + [types.Part.from_bytes(data=b, mime_type="image/jpeg") for b in images]
-    r = _gemini.models.generate_content(
-        model=model,
-        contents=parts,
-        config=types.GenerateContentConfig(
-            response_mime_type="application/json",
-            response_json_schema=LIVE_SCHEMA,
-            thinking_config=types.ThinkingConfig(thinking_level=level),
-            temperature=0,
-        ),
-    )
-    return json.loads(r.text or "{}")
-
-
 def _claude_call(model: str, effort: str, prompt: str, images: list[bytes]) -> dict:
     global _claude
     import anthropic
 
     if _claude is None:
-        _claude = anthropic.Anthropic(max_retries=0)
+        _claude = anthropic.Anthropic(max_retries=0)  # a stale live answer is worthless: the next frame is already coming
     content: list = [{"type": "image", "source": {"type": "base64", "media_type": "image/jpeg", "data": base64.standard_b64encode(b).decode()}} for b in images]
     content.append({"type": "text", "text": prompt})
     kwargs: dict = {
@@ -134,21 +92,14 @@ def _claude_call(model: str, effort: str, prompt: str, images: list[bytes]) -> d
     return json.loads(next((b.text for b in r.content if b.type == "text"), "{}"))
 
 
+def source_of(model: str) -> str:
+    return next((k for k in ("sonnet", "haiku") if k in model), "claude")
+
+
 def check(models: dict, snapshot: bytes, ref: bytes | None, step: dict, task: dict | None) -> tuple[dict, float, str]:
-    """Returns (result, latency_ms, source): 'gemini', 'haiku' or 'sonnet'."""
-    p = provider(models.get("live_vision", "auto"))
+    """Returns (result, latency_ms, source), source = 'sonnet' for the default claude_live."""
     total = len((task or {}).get("steps", [])) or 1
-    prompt = build_prompt(step, task, ref is not None)
     images = ([ref] if ref else []) + [snapshot]
     t0 = time.perf_counter()
-    if p == "gemini":
-        try:
-            raw = _gemini_call(models["gemini_live"], models.get("gemini_thinking", "minimal"), prompt, images)
-            return parse(raw, total), (time.perf_counter() - t0) * 1000, "gemini"
-        except Exception as e:
-            if models.get("live_vision") != "auto" or not _busy(e):
-                raise
-            global _gemini_rest_until
-            _gemini_rest_until = time.monotonic() + GEMINI_REST_S  # quota/overload: Claude takes over for a while
-    raw = _claude_call(models["claude_live"], models.get("claude_live_effort", "low"), prompt, images)
-    return parse(raw, total), (time.perf_counter() - t0) * 1000, "haiku" if "haiku" in models["claude_live"] else "sonnet"
+    raw = _claude_call(models["claude_live"], models.get("claude_live_effort", "low"), build_prompt(step, task, ref is not None), images)
+    return parse(raw, total), (time.perf_counter() - t0) * 1000, source_of(models["claude_live"])

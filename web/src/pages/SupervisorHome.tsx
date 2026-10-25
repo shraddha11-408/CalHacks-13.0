@@ -5,9 +5,11 @@ import { AppShell } from '../components/AppShell'
 import { RaceLog } from '../components/RaceLog'
 import { StdbGate } from '../components/Stdb'
 import { doubleClaims } from '../lib/claims'
+import { useRegisterDevice } from '../lib/device'
 import { fmtLatency } from '../format'
 import { api, type Step, type Task, type VideoJob, type WorkerReport } from '../lib/api'
 import { apiUrl } from '../lib/audio'
+import { getMedia } from '../lib/media'
 import { reducers, tables } from '../module_bindings'
 import { STAGES } from '../lib/stages'
 
@@ -26,7 +28,8 @@ const ago = (d: Date) => {
 /** /supervisor — help alerts, add a task from a video, generate a worker report. */
 export function SupervisorHomePage() {
   const [params, setParams] = useSearchParams()
-  const tab = (params.get('tab') as TabKey) || 'help'
+  const asked = params.get('tab')
+  const tab: TabKey = TABS.some((t) => t.key === asked) ? (asked as TabKey) : 'help'
   return (
     <AppShell back={{ to: '/choose', label: 'Back' }}>
       <h1 className="app-title">Supervisor</h1>
@@ -41,6 +44,7 @@ export function SupervisorHomePage() {
         {(err) => (
           <>
             {err && <p className="note-almost">{err}</p>}
+            <SupervisorDevice />
             {tab === 'help' && <HelpTab />}
             {tab === 'add' && <AddTaskTab />}
             {tab === 'report' && <ReportTab />}
@@ -49,6 +53,12 @@ export function SupervisorHomePage() {
       </StdbGate>
     </AppShell>
   )
+}
+
+/** This screen is a supervisor device: it may change support levels (the reducer checks the role). */
+function SupervisorDevice() {
+  useRegisterDevice('supervisor', 'Supervisor')
+  return null
 }
 
 function useStepLookup() {
@@ -65,10 +75,16 @@ function useStepLookup() {
     return {
       taskRows,
       steps,
-      title: (id: string) => taskRows.find((t) => t.id === id)?.title ?? id,
+      title: (id: string) => taskRows.find((t) => t.id === id)?.title ?? taskName(id),
       stepText: (taskId: string, stepId: number) => steps.get(taskId)?.find((s) => s.id === stepId)?.instruction ?? `Step ${stepId}`,
     }
   }, [taskRows])
+}
+
+/** A removed task keeps only its id ("put_a_sleeve_on_a_coffee_cup_1792866779"): show it as words. */
+const taskName = (id: string) => {
+  const s = id.replace(/_\d+$/, '').replace(/_/g, ' ').trim()
+  return s ? s[0].toUpperCase() + s.slice(1) : id
 }
 
 // ---------------- Help alerts ----------------
@@ -76,6 +92,7 @@ function HelpTab() {
   const [help] = useTable(tables.helpRequest)
   const [workers] = useTable(tables.worker)
   const [attempts] = useTable(tables.claimAttempt)
+  const [routes] = useTable(tables.helpRoute)
   const claim = useReducer(reducers.claimHelp)
   const resolve = useReducer(reducers.resolveHelp)
   const { title, stepText } = useStepLookup()
@@ -103,6 +120,15 @@ function HelpTab() {
               <strong className="alert-title">{name(h.workerId)} needs help</strong>
               {h.status === 'open' ? <span className="badge-urgent">{ago(h.createdAt.toDate())}</span> : <span className="badge-claimed">{h.claimedBy} is going</span>}
             </div>
+            {h.status === 'open' && (
+              <span className="small">
+                {routes.find((r) => r.helpId === h.id)?.routedTo === 'supervisor' ? (
+                  <strong style={{ color: 'var(--urgent)' }}>No buddy answered in 20 s, so it came to you.</strong>
+                ) : (
+                  <span className="muted">Sent to help buddies first. It comes to you if nobody answers in 20 s.</span>
+                )}
+              </span>
+            )}
             <span className="muted">
               {title(h.taskId)} · {stepText(h.taskId, h.stepId)}
             </span>
@@ -284,7 +310,7 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
   const open = async () => {
     setErr(null)
     try {
-      stream.current = await navigator.mediaDevices.getUserMedia({ video: { width: 1280, height: 720 }, audio: true })
+      stream.current = await getMedia({ video: { width: 1280, height: 720 }, audio: true })
       setState('preview')
       requestAnimationFrame(() => {
         if (live.current) live.current.srcObject = stream.current

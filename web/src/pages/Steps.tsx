@@ -6,7 +6,7 @@ import { CaptionBar, StepDots } from '../components/ui'
 import { api, type PublicConfig, type StepPayload, type Task } from '../lib/api'
 import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
 
-const ttsUrl = (text: string) => `/tts?text=${encodeURIComponent(text)}` // cached clip if pre-recorded
+const ttsUrl = (text: string, voice?: string | null) => `/tts?text=${encodeURIComponent(text)}${voice ? `&voice=${encodeURIComponent(voice)}` : ''}` // cached clip if pre-recorded
 
 /** Worker view of a task: one big step at a time, with picture, voice and a "why". */
 export function StepsPage() {
@@ -63,7 +63,7 @@ function StepsView({ taskId }: { taskId?: string }) {
   }, [taskId])
 
   const step = task?.steps[i]
-  const say = useCallback((text: string) => audio.current?.play([{ text, url: ttsUrl(text) }]), [])
+  const say = useCallback((text: string) => audio.current?.play([{ text, url: ttsUrl(text, cfg?.voice_id) }]), [cfg?.voice_id])
 
   // speak each new step (after the first tap, so the browser allows audio)
   useEffect(() => {
