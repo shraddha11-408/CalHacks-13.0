@@ -7,7 +7,7 @@ import { StdbGate } from '../components/Stdb'
 import { doubleClaims } from '../lib/claims'
 import { useRegisterDevice } from '../lib/device'
 import { fmtLatency } from '../format'
-import { api, type Step, type Task, type VideoJob, type WorkerReport } from '../lib/api'
+import { api, type Step, type Task, type VideoJob } from '../lib/api'
 import { apiUrl } from '../lib/audio'
 import { getMedia } from '../lib/media'
 import { reducers, tables } from '../module_bindings'
@@ -16,7 +16,6 @@ import { levelOf } from '../lib/levels'
 import { IncomingCall } from '../components/IncomingCall'
 import { StepTimeline, SupportMeter, CorrectionBubble } from '../components/viz'
 import { EmptyState } from '../components/States'
-import { MetricTile } from '../components/ui'
 import { Dashboard } from '../components/dash/Dashboard'
 import '../styles/supervisor.css'
 
@@ -25,11 +24,10 @@ const TABS = [
   { key: 'floor', label: 'Floor' },
   { key: 'help', label: 'Help' },
   { key: 'add', label: 'Add a task' },
-  { key: 'report', label: 'Reports' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
 
-/** /supervisor — help alerts, add a task from a video, generate a worker report. */
+/** /supervisor — dashboard, live floor, help alerts, add a task from a video. */
 export function SupervisorHomePage() {
   const [params, setParams] = useSearchParams()
   const asked = params.get('tab')
@@ -60,7 +58,6 @@ export function SupervisorHomePage() {
             {tab === 'floor' && <Floor showTest={showTest} />}
             {tab === 'help' && <HelpTab showTest={showTest} />}
             {tab === 'add' && <AddTaskTab />}
-            {tab === 'report' && <ReportTab showTest={showTest} />}
           </>
         )}
       </StdbGate>
@@ -581,264 +578,6 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
       </div>
       {err && <p className="note-almost">{err}</p>}
       <p className="small muted">Faces are blurred in the photos that are kept. The video is deleted after the steps are made.</p>
-    </div>
-  )
-}
-
-// ---------------- Worker report ----------------
-const TREND: Record<string, { label: string; cls: string }> = {
-  improving: { label: 'Improving', cls: 'trend-good' },
-  steady: { label: 'Steady', cls: 'trend-flat' },
-  more_mistakes_lately: { label: 'Needs more support lately', cls: 'trend-watch' },
-  not_enough_data: { label: 'Not enough tries yet', cls: 'trend-flat' },
-}
-
-type Glance = { sessions: number; mastered: number; total: number; trend: keyof typeof TREND; reteach: { text: string; n: number }[] }
-
-function ReportTab({ showTest }: { showTest: boolean }) {
-  const [workers] = useTable(tables.worker)
-  const [sessions] = useTable(tables.session)
-  const [events] = useTable(tables.stepEvent)
-  const [help] = useTable(tables.helpRequest)
-  const [mastery] = useTable(tables.mastery)
-  const { steps, title, stepText } = useStepLookup()
-  const [reps, setReps] = useState<Record<string, WorkerReport>>({})
-  const [busy, setBusy] = useState<string | null>(null)
-  const [err, setErr] = useState<string | null>(null)
-  const list = workers.filter((x) => showTest || !isTest(x.id, x.name))
-
-  /** What a coach wants at a glance: steps mastered, trend over tries, steps worth teaching again. All measured from events. */
-  const glance = (workerId: string): Glance => {
-    const mine = sessions.filter((s) => s.workerId === workerId && steps.has(s.taskId)).sort((a, b) => a.startedAt.toDate().getTime() - b.startedAt.toDate().getTime())
-    const taskIds = [...new Set(mine.map((s) => s.taskId))]
-    const total = taskIds.reduce((n, id) => n + (steps.get(id)?.length ?? 0), 0)
-    const mastered = mastery.filter((m) => m.workerId === workerId && taskIds.includes(m.taskId) && m.level >= 2).length
-    const mistakes = events.filter((e) => e.workerId === workerId && e.kind === 'mistake')
-    const per = mine.map((s) => mistakes.filter((e) => e.sessionId === s.id).length)
-    let trend: Glance['trend'] = 'not_enough_data'
-    if (per.length >= 2) {
-      const last = per[per.length - 1]
-      const before = per.slice(0, -1).reduce((a, b) => a + b, 0) / (per.length - 1)
-      trend = last < before ? 'improving' : last > before ? 'more_mistakes_lately' : 'steady'
-    }
-    const byStep = new Map<string, { text: string; n: number }>()
-    for (const e of mistakes) {
-      const k = `${e.taskId}:${e.stepId}`
-      byStep.set(k, { text: stepText(e.taskId, e.stepId), n: (byStep.get(k)?.n ?? 0) + 1 })
-    }
-    const reteach = [...byStep.values()].filter((x) => x.n >= 2).sort((a, b) => b.n - a.n).slice(0, 3)
-    return { sessions: mine.length, mastered, total, trend, reteach }
-  }
-
-  const generate = async (w: (typeof workers)[number]) => {
-    setBusy(w.id)
-    setErr(null)
-    try {
-      const mine = sessions.filter((s) => s.workerId === w.id)
-      const body = {
-        worker_name: w.name,
-        sessions: mine.map((s) => ({ id: s.id, task_id: s.taskId, task_title: title(s.taskId), started_at: s.startedAt.toDate().toISOString(), ended_at: s.endedAt ? s.endedAt.toDate().toISOString() : null, status: s.status, steps_total: steps.get(s.taskId)?.length ?? 0 })),
-        events: events
-          .filter((e) => e.workerId === w.id && ['done', 'mistake', 'skipped', 'help'].includes(e.kind))
-          .map((e) => ({ session_id: e.sessionId, task_id: e.taskId, step_id: e.stepId, step_text: stepText(e.taskId, e.stepId), kind: e.kind, note: e.note, ts: e.ts.toDate().toISOString() })),
-        help: help.filter((h) => h.workerId === w.id).map((h) => ({ task_id: h.taskId, step_text: stepText(h.taskId, h.stepId), status: h.status, created_at: h.createdAt.toDate().toISOString(), note: h.note })),
-      }
-      const r = await api.report(body)
-      setReps((x) => ({ ...x, [w.id]: r }))
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(null)
-    }
-  }
-
-  if (!list.length) return <EmptyState title="No workers yet" text="A worker appears here after they start a task." />
-  return (
-    <div className="stack" style={{ gap: 16 }}>
-      <p className="sv-sub">One card per worker, in plain words. Press Write full report for a summary you can share.</p>
-      {err && <p className="note-almost">{err}</p>}
-      <div className="sv-reports">
-        {list.map((w) => {
-          const g = glance(w.id)
-          const rep = reps[w.id]
-          return (
-            <article key={w.id} className="card sv-rcard">
-              <header className="spread">
-                <h3 className="sv-name">{w.name}</h3>
-                <span className={`trend ${TREND[g.trend].cls}`}>{TREND[g.trend].label}</span>
-              </header>
-              {g.sessions === 0 ? (
-                <p className="muted">{w.name} has not done a task yet.</p>
-              ) : (
-                <>
-                  <p className="sv-big">
-                    <b className="num">{g.mastered}</b> of <b className="num">{g.total}</b> steps mastered
-                  </p>
-                  <p className="small muted">
-                    From <span className="num">{g.sessions}</span> {g.sessions === 1 ? 'try' : 'tries'}. A step is mastered when {w.name} needs only a short reminder or less.
-                  </p>
-                  <div>
-                    <p className="eyebrow">Where to teach again</p>
-                    {g.reteach.length ? (
-                      <ul className="dot-list">
-                        {g.reteach.map((r, k) => (
-                          <li key={k}>
-                            {r.text} <span className="muted">(<span className="num">{r.n}</span> mistakes)</span>
-                          </li>
-                        ))}
-                      </ul>
-                    ) : (
-                      <p className="small">No step needs teaching again.</p>
-                    )}
-                  </div>
-                </>
-              )}
-              {g.sessions > 0 && <div className="row no-print">
-                <button className="btn btn-primary" onClick={() => generate(w)} disabled={busy !== null}>
-                  {busy === w.id ? 'Writing the report…' : rep ? 'Write it again' : 'Write full report'}
-                </button>
-                {rep && (
-                  <button className="btn btn-ghost" onClick={() => window.print()}>
-                    Print
-                  </button>
-                )}
-              </div>}
-              {rep && <ReportView rep={rep} />}
-            </article>
-          )
-        })}
-      </div>
-    </div>
-  )
-}
-
-function ReportView({ rep }: { rep: WorkerReport }) {
-  const s = rep.stats
-  const r = rep.report
-  return (
-    <article className="report sv-full">
-      <header className="report-head">
-        <div>
-          <h2 className="report-title">{rep.worker}</h2>
-          <span className="small muted">Report · {new Date(rep.generated_at * 1000).toLocaleString()}</span>
-        </div>
-        <div className="sv-kpis">
-          <MetricTile label="Sessions" value={<span className="num">{s.sessions}</span>} />
-          <MetricTile label="Tasks" value={<span className="num">{s.tasks.length}</span>} />
-          <MetricTile label="Mistakes corrected" value={<span className="num">{s.mistakes_total}</span>} />
-          <MetricTile label="Help requests" value={<span className="num">{s.help_requests}</span>} />
-        </div>
-      </header>
-
-      {!s.sessions && <p className="muted">No sessions recorded for this worker yet.</p>}
-      {r && (
-        <section className="report-sec">
-          <p className="report-summary">{r.summary}</p>
-          <div className="report-cols">
-            <ReportList title="Strengths" items={r.strengths} />
-            <ReportList title="Needs support with" items={r.needs_support} />
-          </div>
-          <h3>Has it improved?</h3>
-          <p>{r.improvement}</p>
-          <ReportList title="Next steps for the coach" items={r.recommendations} />
-          <div className="for-worker">
-            <span className="sv-mono">READ-ALOUD VERSION FOR {rep.worker.toUpperCase()}</span>
-            <p>{r.for_worker}</p>
-          </div>
-        </section>
-      )}
-      {s.sessions > 0 && !r && <p className="note-almost">Claude could not write the summary right now. The measured numbers below are still correct.</p>}
-
-      <section className="report-sec">
-        <h3>Tasks</h3>
-        <div className="stack" style={{ gap: 14 }}>
-          {s.tasks.map((t) => (
-            <div key={t.task_id} className="report-task card sv-trend">
-              <div className="spread">
-                <strong>{t.title}</strong>
-                <span className={`trend ${TREND[t.trend].cls}`}>{TREND[t.trend].label}</span>
-              </div>
-              <span className="small muted">
-                Done {t.times_done} {t.times_done === 1 ? 'time' : 'times'}, finished {t.times_finished} · {t.mistakes_total} corrections
-              </span>
-              <AttemptBars values={t.mistakes_per_attempt} />
-              {t.hardest_steps.length > 0 && (
-                <div className="sv-hard">
-                  <span className="sv-mono">MISTAKES BY STEP</span>
-                  <ul className="plain-list">
-                    {t.hardest_steps.map((h, k) => (
-                      <li key={k} className="spread small">
-                        <span>{h.step}</span>
-                        <span className="num">{h.mistakes}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              )}
-              {t.attempts.some((a) => a.mistake_notes.length) && (
-                <details>
-                  <summary className="small">Every correction</summary>
-                  <ul className="plain-list small">
-                    {t.attempts.flatMap((a, k) => a.mistake_notes.map((n, j) => (
-                      <li key={`${k}-${j}`}>
-                        Try {k + 1} · {n.step}: <span className="muted">{n.what}</span>
-                      </li>
-                    )))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-      {rep.notes.length > 0 && (
-        <section className="report-sec">
-          <h3>Notes remembered about {rep.worker}</h3>
-          <p className="small muted">Plain-language notes the coach keeps between sessions (Moss memory).</p>
-          <ul className="plain-list small">
-            {rep.notes.map((n, k) => (
-              <li key={k}>{n}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <footer className="small muted">Numbers measured from this worker's sessions. Words written by Claude{rep.latency_ms ? ` in ${fmtLatency(rep.latency_ms)}` : ''}.</footer>
-    </article>
-  )
-}
-
-function ReportList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div>
-      <h3>{title}</h3>
-      <ul className="dot-list">
-        {items.map((x, k) => (
-          <li key={k}>{x}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/** Sparkline of corrections per try, oldest → newest. One series in Rio; the latest value is labelled in mono. */
-function AttemptBars({ values }: { values: number[] }) {
-  if (!values.length) return null
-  const max = Math.max(1, ...values)
-  const W = 240
-  const H = 48
-  const step = values.length > 1 ? W / (values.length - 1) : 0
-  const pts = values.map((v, k) => [values.length > 1 ? k * step : W / 2, 6 + (1 - v / max) * (H - 12)] as const)
-  const last = pts[pts.length - 1]
-  return (
-    <div className="sv-spark">
-      <svg viewBox={`-4 0 ${W + 8} ${H}`} width="100%" height={H} preserveAspectRatio="none" role="img" aria-label={`Corrections per try, oldest first: ${values.join(', ')}`}>
-        <line x1={0} x2={W} y1={H - 6} y2={H - 6} stroke="var(--line)" vectorEffect="non-scaling-stroke" />
-        <polyline points={pts.map((p) => p.join(',')).join(' ')} fill="none" stroke="var(--rio)" strokeWidth={2} strokeLinejoin="round" strokeLinecap="round" vectorEffect="non-scaling-stroke" />
-        <circle cx={last[0]} cy={last[1]} r={3.5} fill="var(--rio)" />
-      </svg>
-      <span className="sv-mono num">
-        {values.length} {values.length === 1 ? 'TRY' : 'TRIES'} · LATEST {values[values.length - 1]}
-      </span>
     </div>
   )
 }

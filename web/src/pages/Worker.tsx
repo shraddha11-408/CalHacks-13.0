@@ -85,15 +85,20 @@ const PLACE_LABEL: Record<Place, string> = { Café: 'Café', Store: 'Store', Sto
 type HomeTask = { task_id: string; title: string; steps: number; place: Place; cover?: string; minutes?: number }
 type Extra = Task & { place?: string; cover_photo?: string; minutes?: number }
 
-// Older taught tasks have no place yet: a plain guess from the title, else "More tasks".
-const guessPlace = (title: string): Place => {
-  const t = title.toLowerCase()
-  if (/coffee|espresso|latte|cup|café|cafe|drink/.test(t)) return 'Café'
-  if (/shelf|aisle|restock|store/.test(t)) return 'Store'
-  if (/box|stockroom|backroom/.test(t)) return 'Stockroom'
-  return 'Other'
+const asPlace = (p: string | undefined): Place => (PLACES.includes(p as Place) ? (p as Place) : 'Café')
+
+// Demo: the "Next up" card is always the coffee-sleeve task, with the founder's cover photo
+// (null = fall back to the task's first step photo).
+const SLEEVE_COVER: string | null = '/media/sleeve-cover.jpg'
+const SLEEVE_TITLE = 'Put sleeves on coffee cups'
+// "My tasks": exactly these three, in this order (made by scripts/seed_example_tasks.py).
+const MY_TASK_IDS = ['example_clean_coffee_machine', 'example_venti_americano', 'example_strawberry_matcha']
+// Cover photos for "My tasks" (first-person, public/media).
+const MY_TASK_COVERS: Record<string, string> = {
+  example_clean_coffee_machine: '/media/clean-machine.jpg',
+  example_venti_americano: '/media/venti-americano.jpg',
+  example_strawberry_matcha: '/media/strawberry-matcha.jpg',
 }
-const asPlace = (p: string | undefined, title: string): Place => (PLACES.includes(p as Place) ? (p as Place) : guessPlace(title))
 
 // Status from how many times this worker finished the task on this device.
 const statusOf = (n: number) =>
@@ -137,35 +142,35 @@ function HelpMeter({ fill, label }: { fill: number; label: string }) {
 /** /worker — "My workday". */
 export function WorkerPage() {
   const [tasks, setTasks] = useState<HomeTask[] | null>(null)
+  const [next, setNext] = useState<HomeTask | null>(null)
   const [err, setErr] = useState<string | null>(null)
   const [done] = useState(readDone)
   useEffect(() => {
     api
       .tasks()
       .then(async (list) => {
-        // Same title taught again: show the newest only (the list is newest first).
-        const seen = new Set<string>()
-        const uniq = list.filter((t) => {
-          const k = t.title.trim().toLowerCase()
-          if (seen.has(k)) return false
-          seen.add(k)
-          return true
+        const toHome = (t: { task_id: string; title: string; steps: number }, f: Extra | null, cover?: string): HomeTask => ({
+          task_id: t.task_id, title: t.title, steps: t.steps, place: asPlace(f?.place), cover, minutes: f?.minutes,
         })
-        // The list has no place or photo; the full task JSON does.
-        const full = await Promise.all(uniq.map((t) => api.task(t.task_id).then((x) => x as Extra).catch(() => null)))
-        setTasks(
-          uniq.map((t, i) => {
-            const f = full[i]
-            const cover = f?.cover_photo || f?.steps.find((s) => s.reference_photo)?.reference_photo || undefined
-            return { task_id: t.task_id, title: t.title, steps: t.steps, place: asPlace(f?.place, t.title), cover, minutes: f?.minutes }
-          }),
-        )
+        // My tasks: the three Café tasks, in order.
+        const mine = MY_TASK_IDS.map((id) => list.find((t) => t.task_id === id)).filter((t): t is NonNullable<typeof t> => !!t)
+        const mineFull = await Promise.all(mine.map((t) => api.task(t.task_id).then((x) => x as Extra).catch(() => null)))
+        setTasks(mine.map((t, i) => toHome(t, mineFull[i], MY_TASK_COVERS[t.task_id] ?? (mineFull[i]?.cover_photo || undefined))))
+        // Next up: the newest coffee-sleeve task whose steps have reference photos (the list is newest first).
+        const sleeves = list.filter((t) => /sleeve/i.test(t.title) && !t.task_id.startsWith('example_'))
+        const full = await Promise.all(sleeves.map((t) => api.task(t.task_id).then((x) => x as Extra).catch(() => null)))
+        const i = full.findIndex((f) => f?.steps.some((s) => s.reference_photo))
+        const k = i >= 0 ? i : 0
+        if (sleeves[k]) {
+          const stepPhoto = full[k]?.steps.find((s) => s.reference_photo)?.reference_photo
+          const cover = SLEEVE_COVER ?? (stepPhoto ? apiUrl(stepPhoto) : undefined) // local /media path, no /api prefix
+          setNext({ ...toHome(sleeves[k], full[k]), title: SLEEVE_TITLE, place: 'Café', cover })
+        }
       })
       .catch((e) => setErr(e.message))
   }, [])
   const timesDone = Object.values(done).reduce((a, b) => a + b, 0)
   const own = tasks?.filter((t) => (done[t.task_id] ?? 0) >= 3).length ?? 0
-  const next = tasks && (tasks.find((t) => statusOf(done[t.task_id] ?? 0).key === 'practicing') ?? tasks.find((t) => !done[t.task_id]) ?? tasks[0])
   return (
     <AppShell back={{ to: '/choose', label: 'Back' }}>
       <NameGate>
@@ -182,7 +187,7 @@ export function WorkerPage() {
             </header>
             {err && <ErrorNote text="We could not load your tasks. Try again." onRetry={() => location.reload()} />}
             {tasks === null && !err && <Loading lines={3} label="Loading your tasks" />}
-            {tasks && tasks.length === 0 && <EmptyState title="No tasks yet." text="Your coach will add a task for you." />}
+            {tasks && tasks.length === 0 && !next && <EmptyState title="No tasks yet." text="Your coach will add a task for you." />}
 
             {next && (
               <section className="wh-next card" aria-labelledby="wh-next-title">
@@ -202,7 +207,7 @@ export function WorkerPage() {
               </section>
             )}
 
-            {tasks && tasks.length > 0 && (
+            {Boolean(tasks?.length || next) && (
               <section className="wh-prog card" aria-label="My progress">
                 <p className="wh-prog-line">
                   {timesDone === 0 ? 'Your first task is waiting. You can do it.' : own > 0 ? `You can do ${own} ${own === 1 ? 'task' : 'tasks'} on your own. Great work!` : `You finished a task ${timesDone === 1 ? 'one time' : `${timesDone} times`}. Keep going!`}
@@ -214,33 +219,24 @@ export function WorkerPage() {
             {tasks && tasks.length > 0 && (
               <section className="stack" style={{ gap: 18 }} aria-labelledby="wh-all">
                 <h2 id="wh-all" className="wh-h2">My tasks</h2>
-                {PLACES.map((place) => {
-                  const group = tasks.filter((t) => t.place === place)
-                  if (!group.length) return null
-                  return (
-                    <div key={place} className="stack" style={{ gap: 10 }}>
-                      <h3 className={`wh-place wh-place-${place.toLowerCase()}`}>{PLACE_LABEL[place]}</h3>
-                      <ul className="wh-grid">
-                        {group.map((t) => {
-                          const st = statusOf(done[t.task_id] ?? 0)
-                          return (
-                            <li key={t.task_id}>
-                              <Link to={`/worker/${t.task_id}`} className="wh-card card">
-                                <TaskPhoto task={t} />
-                                <span className="wh-card-body">
-                                  <span className="wh-card-title">{t.title}</span>
-                                  <span className={`wk-pill ${st.key === 'new' ? '' : 'practicing'}`}>{st.label}</span>
-                                  <HelpMeter fill={st.fill} label={st.help} />
-                                  <span className="wk-mono">{t.steps} steps{t.minutes ? ` · ${t.minutes} min` : ''}</span>
-                                </span>
-                              </Link>
-                            </li>
-                          )
-                        })}
-                      </ul>
-                    </div>
-                  )
-                })}
+                <ul className="wh-grid">
+                  {tasks.map((t) => {
+                    const st = statusOf(done[t.task_id] ?? 0)
+                    return (
+                      <li key={t.task_id}>
+                        <Link to={`/worker/${t.task_id}`} className="wh-card card">
+                          <TaskPhoto task={t} />
+                          <span className="wh-card-body">
+                            <span className="wh-card-title">{t.title}</span>
+                            <span className={`wk-pill ${st.key === 'new' ? '' : 'practicing'}`}>{st.label}</span>
+                            <HelpMeter fill={st.fill} label={st.help} />
+                            <span className="wk-mono">{t.steps} steps{t.minutes ? ` · ${t.minutes} min` : ''}</span>
+                          </span>
+                        </Link>
+                      </li>
+                    )
+                  })}
+                </ul>
               </section>
             )}
 

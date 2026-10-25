@@ -8,7 +8,7 @@ export function SiteFooter() {
       <div className="sf-inner">
         <div className="sf-col">
           <h3 className="sf-h">Product</h3>
-          <Link to="/#how">How it works</Link>
+          <Link to="/#journey">How it works</Link>
           <Link to="/why">Why it works</Link>
         </div>
         <div className="sf-col">
