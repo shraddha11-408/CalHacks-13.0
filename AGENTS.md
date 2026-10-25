@@ -195,7 +195,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 (cd web && npm install)
 ./run.sh                                       # SpacetimeDB :3000 + module publish, edge :8000, web https://localhost:5173
 .venv/bin/python scripts/seed_example_tasks.py # example café tasks for the demo worker
-.venv/bin/python -m pytest                     # 56 tests
+.venv/bin/python -m pytest                     # 77 tests
 (cd web && npx tsc -b --noEmit && npm test)
 .venv/bin/python scripts/stdb_module_check.py  # module rules on a separate test database
 ```

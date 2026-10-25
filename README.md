@@ -241,7 +241,7 @@ or `--simulate` without hardware. Details are in [wrist/README.md](wrist/README.
 
 **Tests:**
 ```bash
-.venv/bin/python -m pytest              # coach decision rules, debounce, live-check parsing, progress, voice (56 tests)
+.venv/bin/python -m pytest              # coach decision rules, debounce, live-check parsing, progress, voice (77 tests)
 (cd web && npm test)                    # trigger engine
 .venv/bin/python scripts/stdb_module_check.py   # SpacetimeDB rules against a separate test database
 ```
