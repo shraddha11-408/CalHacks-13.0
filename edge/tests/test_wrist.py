@@ -178,7 +178,7 @@ def test_short_touch_sends_a_quiet_note():
     t.r.on_touch()
     assert t.pressed == [("notify", "s1")]
     assert t.events[0][1]["action"] == "notify"
-    assert t.buzz == []  # a note never shows CALL
+    assert t.buzz == ["NOTE"]  # a check mark on the matrix, never CALL
 
 
 def test_call_shows_call_once_help_is_sent():
@@ -193,7 +193,8 @@ def test_call_shows_call_once_help_is_sent():
 def test_nothing_sent_and_no_event_when_the_edge_says_no():
     t = Router({"s1": session("s1")}, reply={"ok": False, "error": "no worker"})
     t.r.on_hold()
-    assert t.events == [] and t.buzz == []
+    t.r.on_touch()
+    assert t.events == [] and t.buzz == []  # no CALL and no check mark for something that did not go out
 
 
 def test_a_failed_press_does_not_raise():

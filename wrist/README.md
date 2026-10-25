@@ -6,7 +6,7 @@ Arduino Uno Q wrist node: a touch sensor plus the built-in LED matrix, connected
 |---|---|
 | Any touch | the matrix flashes once (`ACK`) |
 | Hold 1.5 s or more | **Call the supervisor** (`call_supervisor`): their screen rings until someone answers; the matrix shows `CALL` once the call has gone out; the worker hears "Okay. I'm calling your supervisor now." |
-| Shorter | **A quiet note to the supervisor** (`notify_supervisor`): a line in the supervisor's help list, marked as a note; nothing rings, no buddy alert, no escalation; the worker hears "Okay. I told your supervisor." |
+| Shorter | **A quiet note to the supervisor** (`notify_supervisor`): a line in the supervisor's help list, marked as a note; nothing rings, no buddy alert, no escalation; the matrix shows a check mark (`NOTE`) once it has gone out; the worker hears "Okay. I told your supervisor." |
 
 Both go through `POST /wrist/press` (`kind: call | notify`, the code in `api.wrist_press`) and carry the newest
 face-blurred live frame as the photo. A second press of the same kind within 5 s counts once.
@@ -37,7 +37,7 @@ hold passes 1.5 s). A shorter touch sends the supervisor a quiet note (`kind: no
 ```
 touch sensor -> Uno Q --USB serial 115200 (DOWN / UP)--> bridge --POST /wrist/press--> edge app
                                                                                       |
-   Uno replies ACK on DOWN, BUZZ when the call is sent <---- bridge                   v
+   Uno gets ACK on DOWN, BUZZ / NOTE when sent <------------ bridge                   v
                                        SpacetimeDB reducer call_supervisor -> help_request (routed straight to
                                        the supervisor, no buddy stage) + wrist_call row -> supervisor screen rings
 ```

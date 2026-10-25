@@ -2,7 +2,8 @@
 
 Same protocol as hardware/backend/uno_serial_bridge.py and hardware/uno_q/wrist_node/wrist_node.ino:
   Uno -> laptop: DOWN (touch starts), UP (touch ends)
-  laptop -> Uno: ACK (touch seen: one flash), BUZZ (supervisor called: CALL on the matrix for 2 s)
+  laptop -> Uno: ACK (touch seen: one flash), BUZZ (supervisor called: CALL on the matrix for 2 s),
+                 NOTE (note sent: a check mark for 1.5 s)
   hold >= 1.5 s -> call the supervisor now (rings their screen).   shorter -> a quiet note to the supervisor.
 
 Both go through the same code as POST /wrist/press (api.wrist_press), with the newest face-blurred live frame.
@@ -176,6 +177,8 @@ class HelpRouter:
             log.warning("wrist %s not sent: %s", kind, r.get("error"))
             return
         # CALL on the matrix comes from help_sent (api.wrist_press runs HELP_SENT_HOOKS for a call)
+        if kind == "notify" and self.node:
+            self.node.send("NOTE")
         self.publish("wrist", action=kind, sid=sid, say=r.get("say", []), duplicate=r.get("duplicate", False))
 
     def _buzz(self) -> None:

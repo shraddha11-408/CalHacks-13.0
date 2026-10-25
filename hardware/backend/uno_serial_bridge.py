@@ -1,8 +1,9 @@
 """Wrist node bridge: Arduino Uno Q touch sensor (USB serial) -> edge app.
 
-Protocol (115200 baud, newline-terminated): the Uno sends DOWN / UP; we reply ACK on DOWN and BUZZ
-once the supervisor call is sent. A hold of 1.5 s or more is a help request and calls the supervisor
-(POST /wrist/press, kind=call); a shorter touch sends the supervisor a quiet note (kind=notify).
+Protocol (115200 baud, newline-terminated): the Uno sends DOWN / UP; we reply ACK on DOWN, BUZZ (CALL)
+once the supervisor call is sent, and NOTE (a check mark) once a short touch's note is sent.
+A hold of 1.5 s or more calls the supervisor (POST /wrist/press, kind=call); a shorter touch sends the
+supervisor a quiet note (kind=notify).
 
   python hardware/backend/uno_serial_bridge.py [--port /dev/cu.usbmodemXXXX] [--worker jordan]
   python hardware/backend/uno_serial_bridge.py --simulate     # no hardware: press Enter to "touch"
@@ -75,7 +76,9 @@ def run(port: str, edge: str, worker: str) -> None:
         elif line == "UP" and pressed_at is not None:
             if not sent:
                 print("NOTE TO SUPERVISOR")
-                press(edge, worker, "notify")
+                res = press(edge, worker, "notify")
+                if res and res.get("ok"):
+                    ser.write(b"NOTE\n")
             pressed_at = None
 
 

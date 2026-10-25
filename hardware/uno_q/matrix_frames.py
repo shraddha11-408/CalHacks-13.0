@@ -35,6 +35,22 @@ def border():
     return g
 
 
+CHECK = [  # "note sent" (serial command NOTE): a check mark, centered
+    ".............",
+    "..........#..",
+    ".........##..",
+    "..#.....##...",
+    "..##...##....",
+    "...##.##.....",
+    "....###......",
+    ".....#.......",
+]
+
+
+def check():
+    return [[int(ch == "#") for ch in row] for row in CHECK]
+
+
 def solid():
     return [[1] * COLS for _ in range(ROWS)]
 
@@ -57,7 +73,7 @@ def c_array(name, grid):
 
 class FrameTest(unittest.TestCase):
     def test_pack_unpack_roundtrip(self):
-        for g in (two_letters("C", "A"), two_letters("L", "L"), border(), solid()):
+        for g in (two_letters("C", "A"), two_letters("L", "L"), border(), solid(), check()):
             self.assertEqual(unpack(pack(g)), g)
 
     def test_first_pixel_is_msb_of_word_zero(self):
@@ -75,6 +91,9 @@ class FrameTest(unittest.TestCase):
         g[7][12] = 1  # index 103 -> word 3, bit position 7 from MSB
         self.assertEqual(pack(g), [0, 0, 0, 0x01000000])
 
+    def test_check_is_13x8(self):
+        self.assertEqual((len(CHECK), {len(r) for r in CHECK}), (ROWS, {COLS}))
+
     def test_letters_fit_without_touching_the_edges(self):
         for g in (two_letters("C", "A"), two_letters("L", "L")):
             self.assertTrue(all(row[0] == 0 and row[COLS - 1] == 0 for row in g))
@@ -86,3 +105,4 @@ if __name__ == "__main__":
     print(c_array("CALL_LL", two_letters("L", "L")))
     print(c_array("TEST_BORDER", border()))
     print(c_array("ALL_ON", solid()))
+    print(c_array("NOTE_CHECK", check()))

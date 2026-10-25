@@ -41,6 +41,7 @@ The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in U
 | Uno → laptop | `UP` | Touch ended |
 | Laptop → Uno | `ACK` | Press seen: LED matrix lights solid for 200 ms |
 | Laptop → Uno | `BUZZ` | Help sent: the matrix shows **CALL** for 2 s, alternating `CA` and `LL` every 400 ms (two 5x7 letters fit per frame) |
+| Laptop → Uno | `NOTE` | Short touch's note sent to the supervisor: a **check mark** for 1.5 s |
 | Laptop → Uno | `TEST` | Draws a 1-pixel border around the whole matrix for 3 s, to check alignment |
 
 While `CALL` is showing (2 s), the Uno ignores every command from the laptop (`ACK`, `TEST`, a second `BUZZ`); they are dropped, not queued. Touch events (`DOWN` / `UP`) are still sent.
@@ -54,7 +55,7 @@ Commands are limited to 32 characters. Unknown commands are ignored.
 1. `DOWN` → record the time and reply `ACK` right away, so the worker sees the touch registered.
 2. `UP` → measure the hold time.
    - **>= 1.5 s** (long touch) → `HELP ALERT`, reply `BUZZ`: the matrix shows **CALL**. This is the "I'm stuck" request.
-   - **< 1.5 s** (short touch) → `NOTE TO SUPERVISOR` (a quiet note in the supervisor's help list; nothing rings). The only feedback is the single 200 ms flash from the `ACK` sent on touch down.
+   - **< 1.5 s** (short touch) → `NOTE TO SUPERVISOR` (a quiet note in the supervisor's help list; nothing rings). Once it is sent, reply `NOTE`: the matrix shows a check mark for 1.5 s.
 
 Right now both outcomes only print to the console. The next step is to forward them to the edge app (help → `request_help` reducer in SpacetimeDB, which pages the buddy first and the supervisor after 20 s).
 
@@ -139,7 +140,7 @@ Print `camera/markers/tray_markers_a4.png` at **100% scale** (no "fit to page") 
 
 - Rectify is tested on synthetic views only. Run `rectify.py` against a live snapshot with the printed markers on the tray before relying on it.
 - `PORT` is hardcoded to one machine. Make it an env var or CLI argument before sharing.
-- The matrix has `ACK` (one flash) and `CALL` (help sent). Patterns for *help claimed* and *step done* (§14) are not built yet.
+- The matrix has `ACK` (one flash), `NOTE` (check mark: note sent) and `CALL` (supervisor called). Patterns for *help claimed* and *step done* (§14) are not built yet.
 - The bridge script has no reconnect. The app's `wrist.py` reconnects by itself (verified: unplugged, re-plugged 90 s later, touches came back with no restart).
 - Hold length and help routing are tested in the app (`edge/tests/test_wrist.py`, 20 tests); the bridge script itself has no tests. The camera server has tests in `camera/test_stream.py`.
 - Measured on the real Uno Q (2026-10-24): 17 quick taps were HIGH for 0.09-1.14 s and two 1 s presses for 1.06 and 1.23 s, all read as short; four 2-3 s holds were 2.20-2.77 s, all read as help, and `CALL` showed correctly on the 13x8 matrix. Early on, three quick taps read as 2.8-6.7 s (the sensor stayed HIGH); this did not happen again and the cause is unknown, so re-check with the sensor worn on the wrist.

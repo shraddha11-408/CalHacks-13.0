@@ -49,6 +49,17 @@ const uint32_t CALL_LL[] = { 0x41020810, 0x40820410, 0x2081f7c0, 0x00000000 };
 //   #...........#
 //   #############
 const uint32_t TEST_BORDER[] = { 0xfffc0060, 0x03001800, 0xc006003f, 0xff000000 };
+// "Note sent" (serial command NOTE): the laptop has told the supervisor after a short touch.
+//   .............
+//   ..........#..
+//   .........##..
+//   ..#.....##...
+//   ..##...##....
+//   ...##.##.....
+//   ....###......
+//   .....#.......
+const uint32_t NOTE_CHECK[] = { 0x00000100, 0x18418318, 0x0d803800, 0x80000000 };
+#define NOTE_MS 1500
 #define CALL_MS 2000
 #define CALL_FLIP_MS 400
 
@@ -122,6 +133,11 @@ void loop() {
       if (command == "ACK") {
         showLED(true);
         ledUntil = millis() + 200;
+      }
+
+      else if (command == "NOTE") {
+        matrix.loadFrame(NOTE_CHECK);
+        ledUntil = millis() + NOTE_MS;
       }
 
       else if (command == "TEST") {
