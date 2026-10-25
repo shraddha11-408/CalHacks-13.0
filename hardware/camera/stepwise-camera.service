@@ -10,7 +10,9 @@ After=network.target sound.target
 [Service]
 User=pi
 WorkingDirectory=/home/pi/stepwise_camera
-ExecStart=/usr/bin/python3 -u uvc_streamer.py --rotate 270
+# 1280x720 (720x1280 after rotate): measured 2026-10-24, 15.0 fps, frame gap p50/p99 70/74 ms, ~52% of one core,
+# ~128 KB per frame. 640x480 left only 336x460 px for the live check after the work-area crop.
+ExecStart=/usr/bin/python3 -u uvc_streamer.py --rotate 270 --width 1280 --height 720
 Restart=always
 RestartSec=3
 

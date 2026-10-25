@@ -37,7 +37,7 @@ From `hardware/camera` (use `../.venv/bin/python`):
 
 | Check | Command | Expected (measured) |
 |---|---|---|
-| Live video | open `http://10.12.194.1:8000/stream` in a browser | upright picture (the camera is mounted sideways and rotated in software; frames are 480x640 portrait) |
+| Live video | open `http://10.12.194.1:8000/stream` in a browser | upright picture (the camera is mounted sideways and rotated in software; frames are 720x1280 portrait) |
 | One frame | `curl -o a.jpg http://10.12.194.1:8000/snapshot.jpg` | a JPEG |
 | Video rate | `python receiver.py http://10.12.194.1:8000/stream --duration 10` | 15 fps, frame gap p50/p99 about 70/72 ms |
 | Microphone | `python audio_receiver.py http://10.12.194.1:8000/audio --seconds 10 --save a.wav` | 1.00x realtime, no clipping; play `a.wav` and check you can hear and understand yourself |

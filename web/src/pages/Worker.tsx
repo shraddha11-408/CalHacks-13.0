@@ -196,8 +196,10 @@ function WorkerTask({ taskId }: { taskId: string }) {
     setPhase('summary')
   }, [])
 
+  const [starting, setStarting] = useState(false)
   const start = async () => {
-    if (!task) return
+    if (!task || starting) return
+    setStarting(true)
     setErr(null)
     setMistakes([])
     setHelpSent(false)
@@ -213,8 +215,30 @@ function WorkerTask({ taskId }: { taskId: string }) {
       audio.current?.say(r.say, 'advance', { force: true })
     } catch (e) {
       setErr(`The camera check could not start: ${(e as Error).message}`)
+    } finally {
+      setStarting(false)
     }
   }
+
+  // The edge keeps sessions in memory, so a restart (e.g. --reload while coding) forgets them.
+  // Start a new session for the same worker and task, quietly, at the step the worker is on.
+  const iRef = useRef(i)
+  iRef.current = i
+  const resuming = useRef(false)
+  const onSessionLost = useCallback(async () => {
+    if (!task || resuming.current) return
+    resuming.current = true
+    try {
+      const r = await api.start(readName() || 'Worker', task.task_id)
+      if (iRef.current > 0) await api.goto(r.session_id, iRef.current)
+      sidRef.current = r.session_id
+      setSid(r.session_id)
+    } catch (e) {
+      setErr(`Lost the coach and could not reconnect: ${(e as Error).message}`)
+    } finally {
+      resuming.current = false
+    }
+  }, [task])
 
   const onLiveStep = useCallback((p: StepPayload) => {
     quietNext.current = true
@@ -409,8 +433,8 @@ function WorkerTask({ taskId }: { taskId: string }) {
               </>
             )}
           </div>
-          <button className="btn btn-primary btn-xl btn-block" onClick={start} disabled={!cfg}>
-            {demoVideo ? '▶ Start task with the video' : '📷 Start task'}
+          <button className="btn btn-primary btn-xl btn-block" onClick={start} disabled={!cfg || starting} aria-busy={starting}>
+            {starting ? 'Starting…' : demoVideo ? '▶ Start task with the video' : '📷 Start task'}
           </button>
           <p className="small muted center">
             {demoVideo ? 'The video plays here and is checked like the camera. It stays in this browser.' : 'The camera turns on. Your face is blurred, and no video is saved.'}
@@ -445,7 +469,7 @@ function WorkerTask({ taskId }: { taskId: string }) {
                 ))}
               </ul>
             )}
-            <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} file={demoVideo} />
+            <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} file={demoVideo} onSessionLost={onSessionLost} />
             <div className="row">
               <button className="btn btn-secondary" onClick={() => say(step.instruction)}>
                 🔊 Hear it

@@ -10,6 +10,7 @@ import { fmtLatency } from '../format'
 import { api, type Step, type Task, type VideoJob, type WorkerReport } from '../lib/api'
 import { apiUrl } from '../lib/audio'
 import { getMedia } from '../lib/media'
+import { openGlasses, openGlassesMic, type GlassesStream } from '../lib/glasses'
 import { reducers, tables } from '../module_bindings'
 import { STAGES } from '../lib/stages'
 
@@ -255,6 +256,16 @@ function AddTaskTab() {
           })}
         </ol>
       )}
+      {tasks?.length === 0 && (
+        <section className="card stack" style={{ gap: 6 }} role="status">
+          <strong>No task found in this video.</strong>
+          <span>
+            Show the whole task with your hands on the table, and say each step out loud as you do it. A video of a minute or so works
+            best.
+          </span>
+          {job?.result?.transcript_clean && <span className="small muted">What we heard: “{job.result.transcript_clean}”</span>}
+        </section>
+      )}
       {tasks?.map((t) => (
         <section key={t.task_id} className="card stack" style={{ gap: 12 }}>
           <div className="spread">
@@ -284,10 +295,22 @@ function AddTaskTab() {
   )
 }
 
-/** Record a demo with the webcam + mic, preview it, then send it for steps. */
+const REC_CAM_KEY = 'stepwise-rec-camera'
+
+/** Record a demo with the laptop camera + mic, or the glasses camera + mic, preview it, then send it for steps. */
 function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: boolean }) {
   const live = useRef<HTMLVideoElement | null>(null)
   const stream = useRef<MediaStream | null>(null)
+  const glasses = useRef<GlassesStream | null>(null)
+  const glassesMic = useRef<GlassesStream | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [source, setSource] = useState<'laptop' | 'glasses'>(() => {
+    try {
+      return localStorage.getItem(REC_CAM_KEY) === 'glasses' ? 'glasses' : 'laptop'
+    } catch {
+      return 'laptop'
+    }
+  })
   const rec = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
   const [state, setState] = useState<'idle' | 'preview' | 'recording' | 'review'>('idle')
@@ -296,6 +319,10 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
   const [err, setErr] = useState<string | null>(null)
 
   const stopStream = () => {
+    glasses.current?.stop()
+    glasses.current = null
+    glassesMic.current?.stop()
+    glassesMic.current = null
     stream.current?.getTracks().forEach((t) => t.stop())
     stream.current = null
   }
@@ -309,14 +336,36 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
 
   const open = async () => {
     setErr(null)
+    setNote(null)
     try {
-      stream.current = await getMedia({ video: { width: 1280, height: 720 }, audio: true })
+      if (source === 'glasses') {
+        // glasses picture + the glasses mic (Brio 100 on the Pi), near the wearer's mouth
+        const [cam, mic] = await Promise.allSettled([openGlasses(), openGlassesMic()])
+        if (cam.status === 'rejected') {
+          if (mic.status === 'fulfilled') mic.value.stop()
+          throw cam.reason
+        }
+        glasses.current = cam.value
+        let audio: MediaStreamTrack[]
+        if (mic.status === 'fulfilled') {
+          glassesMic.current = mic.value
+          audio = mic.value.stream.getAudioTracks()
+        } else {
+          // the picture works but the glasses mic doesn't: record anyway, with the laptop mic, and say so
+          audio = (await getMedia({ audio: true })).getAudioTracks()
+          setNote(`${(mic.reason as Error).message} Recording with the laptop mic instead.`)
+        }
+        stream.current = new MediaStream([...cam.value.stream.getVideoTracks(), ...audio])
+      } else {
+        stream.current = await getMedia({ video: { width: 1280, height: 720 }, audio: true })
+      }
       setState('preview')
       requestAnimationFrame(() => {
         if (live.current) live.current.srcObject = stream.current
       })
     } catch (e) {
-      setErr(`Camera or microphone blocked: ${(e as Error).message}`)
+      const m = (e as Error).message
+      setErr(m.startsWith('Glasses camera') ? `${m} Or record with the laptop camera.` : `Camera or microphone blocked: ${m}`)
     }
   }
   const record = () => {
@@ -348,9 +397,31 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
       {state === 'review' && clip && <video className="rec-video" src={clip.url} controls playsInline />}
       <div className="row">
         {state === 'idle' && (
-          <button className="btn btn-primary" onClick={open} disabled={disabled}>
-            📷 Turn on camera
-          </button>
+          <>
+            <button className="btn btn-primary" onClick={open} disabled={disabled}>
+              📷 Turn on camera
+            </button>
+            <label className="row small" style={{ gap: 6 }}>
+              Camera
+              <select
+                className="search"
+                style={{ width: 'auto', minHeight: 40, padding: '4px 8px' }}
+                value={source}
+                onChange={(e) => {
+                  const v = e.target.value === 'glasses' ? 'glasses' : 'laptop'
+                  setSource(v)
+                  try {
+                    localStorage.setItem(REC_CAM_KEY, v)
+                  } catch {
+                    /* ok */
+                  }
+                }}
+              >
+                <option value="laptop">Laptop camera</option>
+                <option value="glasses">Glasses (Pi)</option>
+              </select>
+            </label>
+          </>
         )}
         {state === 'preview' && (
           <button className="btn btn-urgent" onClick={record}>
@@ -384,6 +455,7 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
         )}
       </div>
       {err && <p className="note-almost">{err}</p>}
+      {note && <p className="small muted">{note}</p>}
       <p className="small muted">Faces are blurred in the photos that are kept. The video is deleted after the steps are made.</p>
     </section>
   )

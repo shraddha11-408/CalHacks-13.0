@@ -69,12 +69,12 @@ python hardware/backend/uno_serial_bridge.py
 
 ## Camera stream (Pi 5 -> laptop)
 
-Camera: Logitech Brio 100 (UVC), `/dev/video0`, MJPEG 640x480. Default 15 fps.
+Camera: Logitech Brio 100 (UVC), `/dev/video0`, MJPEG up to 1920x1080. The boot service runs 1280x720 at 15 fps (`uvc_streamer.py` alone defaults to 640x480).
 
 ```bash
 # On the Pi (copy hardware/camera/{uvc_streamer,mjpeg_http}.py over)
 v4l2-ctl --list-devices                     # find the webcam's /dev/video* node
-v4l2-ctl -d /dev/video0 --list-formats-ext  # confirm MJPEG at 640x480
+v4l2-ctl -d /dev/video0 --list-formats-ext  # confirm MJPEG at 1280x720
 python3 uvc_streamer.py                     # --device --width --height --fps --port
 python3 uvc_streamer.py --reencode          # only if the webcam has no MJPEG at that size
 python3 uvc_streamer.py --rotate 270        # rotate clockwise 90/180/270 (decodes + re-encodes on the Pi)
@@ -87,7 +87,7 @@ cd hardware/camera && python3 -m venv .venv
 .venv/bin/python -m unittest discover                               # no Pi or webcam needed
 ```
 
-The webcam sits rotated on the glasses mount, so the live stream runs with `--rotate 270` and the frames are **480x640 (portrait)**. Rotation costs a decode and re-encode: ffmpeg used about 20% of one core and the stream stayed at 15.1 fps. Measured on the Pi with the Brio 100, unrotated (two 20 s runs): **15.0 fps, frame gap p50/p99 70/72 ms**, about 25-55 KB per frame. The harmless ffmpeg line `unable to decode APP fields` at start-up can be ignored.
+The webcam sits rotated on the glasses mount, so the live stream runs with `--rotate 270` and the frames are **720x1280 (portrait)** at the service's 1280x720. Rotation costs a decode and re-encode: at 1280x720 the streamer used about 52% of one core and held 15.0 fps (frame gap p50/p99 70/74 ms, ~128 KB per frame; 640x480 was 22%, 1920x1080 was 106%, all 15.0 fps; measured 2026-10-24, 10 s each). Measured on the Pi with the Brio 100, unrotated (two 20 s runs): **15.0 fps, frame gap p50/p99 70/72 ms**, about 25-55 KB per frame. The harmless ffmpeg line `unable to decode APP fields` at start-up can be ignored.
 
 The server keeps only the newest frame, so a slow client skips frames instead of building up lag. Any number of clients can connect. `/snapshot.jpg` returns one JPEG; `/health` returns `ok` once frames are flowing.
 

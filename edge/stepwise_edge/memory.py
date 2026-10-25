@@ -75,10 +75,18 @@ class Memory:
         except Exception as e:  # cloud sync is best-effort
             log.warning("moss push failed for %s: %s", name, e)
 
-    async def recall(self, worker_id: str, query: str, top_k: int = 3, min_score: float = 0.35) -> tuple[list[dict], float]:
+    async def recall(self, worker_id: str, query: str, top_k: int = 3, min_score: float = 0.35, wait_s: float | None = None) -> tuple[list[dict], float]:
+        """wait_s: give up on a worker's first load (a cloud call, measured up to ~11 s) after this long and
+        answer with no memories; the load keeps going in the background, so the next call is instant."""
         t0 = time.perf_counter()
         try:
-            s, _ = await self._session(worker_id)
+            load = asyncio.ensure_future(self._session(worker_id))
+            load.add_done_callback(lambda f: f.cancelled() or f.exception())  # a failed background load is already in self.error
+            try:
+                s, _ = await asyncio.wait_for(asyncio.shield(load), wait_s)
+            except TimeoutError:
+                log.info("moss index for %s still loading after %.1f s: no memories this time", worker_id, wait_s)
+                return [], (time.perf_counter() - t0) * 1000
             if s.doc_count == 0:
                 return [], (time.perf_counter() - t0) * 1000
             res = await s.query(query, QueryOptions(top_k=top_k))

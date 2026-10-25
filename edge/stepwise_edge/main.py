@@ -13,8 +13,10 @@ import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from urllib.parse import urljoin
 
 import cv2
+import httpx
 import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -146,6 +148,43 @@ def _mjpeg(which: str, fps: float = 15):
 def stream_raw():
     """Raw camera view with marker + gate overlays. Local only — contains the room."""
     return StreamingResponse(_mjpeg("raw"), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/stream/glasses.mjpg")
+async def stream_glasses():
+    """The glasses camera (Pi 5 + Brio 100, devices.pi_stream_url) passed through as is. The page is
+    https and the Pi is plain http with no CORS, so the browser reads it here, same origin. Local only:
+    the browser blurs faces before any frame leaves it, as with the webcam."""
+    return await _pi_passthrough(CONFIG["devices"]["pi_stream_url"], "camera", "multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/stream/glasses.pcm")
+async def stream_glasses_mic():
+    """The glasses mic (Brio 100 on the Pi, served at /audio): 16 kHz mono s16le, passed through as is."""
+    url = urljoin(CONFIG["devices"]["pi_stream_url"], "/audio")
+    return await _pi_passthrough(url, "mic", "audio/L16; rate=16000; channels=1")
+
+
+async def _pi_passthrough(url: str, what: str, default_type: str) -> StreamingResponse:
+    client = httpx.AsyncClient(timeout=httpx.Timeout(5.0, read=10.0))
+    try:
+        resp = await client.send(client.build_request("GET", url), stream=True)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        await client.aclose()
+        raise HTTPException(503, f"Glasses {what} not reachable at {url} ({type(e).__name__}). Is the Pi's USB-C cable in?")
+
+    async def body():
+        try:
+            async for chunk in resp.aiter_raw():
+                yield chunk
+        except httpx.HTTPError:
+            pass  # Pi unplugged mid-stream: end the response, the page reconnects
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    return StreamingResponse(body(), media_type=resp.headers.get("content-type", default_type), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/stream/tray.mjpg")

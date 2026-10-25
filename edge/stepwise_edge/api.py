@@ -239,13 +239,17 @@ async def _levels(s: CoachSession) -> dict[int, int] | None:
         return None
 
 
+MEMORY_WAIT_S = 1.5
+
+
 async def step_payload(s: CoachSession) -> dict:
     st = s.step
     fresh = await _levels(s)  # a coach's override takes effect from the next step
     if fresh is not None:
         s.levels = fresh
     lvl = s.level_of()
-    mems, ms = await memory.recall(s.worker_id, f"{st['instruction']}. {st['common_mistake']}")
+    # a worker's first start loads their Moss index from the cloud: don't let it hold up the step
+    mems, ms = await memory.recall(s.worker_id, f"{st['instruction']}. {st['common_mistake']}", wait_s=MEMORY_WAIT_S)
     speak = []
     if lvl <= 1:  # levels 2–3 (alerts only, independent): no instruction; the screen still shows it
         tip = next((m for m in mems if m.get("kind") == "mistake" and m.get("tip")), None)
