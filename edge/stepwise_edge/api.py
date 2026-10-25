@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import contextvars
+import os
 from pathlib import Path
 import base64
 import json
@@ -32,7 +33,7 @@ log = logging.getLogger("stepwise.api")
 CFG = load_config()
 COACH = CFG["coach"]
 M = CFG["models"]
-DATA = ROOT / "data"
+DATA = Path(os.getenv("STEPWISE_DATA_DIR") or ROOT / "data")  # Vercel: /tmp (see asgi.py)
 
 router = APIRouter()
 store = TaskStore(DATA)

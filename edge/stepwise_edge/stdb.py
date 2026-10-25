@@ -23,7 +23,7 @@ log = logging.getLogger("stepwise.stdb")
 class Stdb:
     def __init__(self, cfg: dict, token_file: Path | None = None, name: str = "Edge app (laptop)") -> None:
         c = cfg["spacetimedb"]
-        if c.get("target") == "maincloud":
+        if (os.getenv("SPACETIMEDB_TARGET") or c.get("target")) == "maincloud":  # env wins (Vercel: maincloud)
             self.uri = os.getenv("SPACETIMEDB_HOST", "https://maincloud.spacetimedb.com").rstrip("/")
             self.db = os.getenv("SPACETIMEDB_MODULE", "")
         else:

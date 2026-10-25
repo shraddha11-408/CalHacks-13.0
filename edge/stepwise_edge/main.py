@@ -53,7 +53,7 @@ def _start_wrist(loop: asyncio.AbstractEventLoop) -> WristNode | None:
     """devices.wrist: uno_q -> the Uno Q wrist node on USB serial (wrist.py). Hold = call the supervisor,
     short touch = a quiet note; both run api.wrist_press on the event loop. The worker's page hears about it
     as a "wrist" event on the WebSocket and speaks the reply."""
-    if CONFIG["devices"].get("wrist") != "uno_q":
+    if CONFIG["devices"].get("wrist") != "uno_q" or os.getenv("STEPWISE_NO_HARDWARE") == "1":
         return None
 
     def press(kind: str, sid: str):
@@ -74,7 +74,7 @@ async def lifespan(_app: FastAPI):
     state["wrist"] = _start_wrist(asyncio.get_running_loop())
     # The MVP coach loop runs the camera in the browser (MediaPipe). The edge-side
     # ArUco pipeline is opt-in (devices.edge_camera) so it doesn't hold the webcam.
-    if CONFIG["devices"].get("edge_camera") and os.getenv("STEPWISE_NO_CAMERA") != "1":
+    if CONFIG["devices"].get("edge_camera") and os.getenv("STEPWISE_NO_CAMERA") != "1" and os.getenv("STEPWISE_NO_HARDWARE") != "1":
         try:
             cam = make_camera(CONFIG["devices"]).start()
             state["pipeline"] = Pipeline(cam, CONFIG, bus).start()

@@ -276,6 +276,21 @@ or `--simulate` without hardware. Details are in [wrist/README.md](wrist/README.
 
 ---
 
+## Deploy
+
+- **Website (Vercel):** `vercel.json` deploys `web/` as a static site with one service, `web`. The landing page
+  and `/why` work fully. The worker, supervisor and buddy pages need the edge app, so on the hosted site they show a
+  short "live demo" card ([RequiresEdge.tsx](web/src/components/RequiresEdge.tsx)) instead of errors.
+- **The live product** runs on the laptop next to the glasses (`./run.sh`): the edge app, SpacetimeDB, the glasses
+  camera and the wristband.
+- **Path to production:**
+  - **Web:** stays on Vercel.
+  - **Edge app:** an always-on container with a persistent disk (Fly.io, Railway or Render). It keeps sessions in
+    memory, files on disk and runs the Droid CLI, so serverless functions are the wrong shape for it.
+  - **SpacetimeDB:** Maincloud.
+  - **Keys:** environment variables.
+  - The edge app already reads `STEPWISE_DATA_DIR`, `SPACETIMEDB_TARGET` and `STEPWISE_NO_HARDWARE` for this.
+
 ## What we tried and cut
 
 - **A Droid-compiled image checker per step** (our first idea for Droid) worked in a kill-test, but rule-based

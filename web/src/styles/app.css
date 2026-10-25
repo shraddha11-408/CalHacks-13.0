@@ -618,3 +618,10 @@ table.killtests td.detail-cell { white-space: normal; min-width: 280px; }
 .mistake-label.do { background: #7fd69a; color: #0b2a14; }
 @keyframes mark-in { from { opacity: 0; transform: scale(1.15); } to { opacity: 1; transform: none; } }
 @media (max-width: 860px) { .worker-step.live { grid-template-columns: 1fr; } .mistake-callout { max-width: 90%; font-size: 16px; } }
+
+/* RequiresEdge: product pages on the hosted (static) website */
+.re-wait { min-height: 40vh; }
+.re-card.card { display: grid; gap: 14px; max-width: 640px; margin: clamp(32px, 8vh, 96px) auto; padding: clamp(24px, 4vw, 40px); }
+.re-title { font: 800 clamp(28px, 4vw, 40px)/1.1 var(--font-display); letter-spacing: -0.02em; margin: 0; color: var(--ink); }
+.re-text { margin: 0; color: var(--ink-2); font-size: 17px; line-height: 1.55; }
+.re-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 6px; }

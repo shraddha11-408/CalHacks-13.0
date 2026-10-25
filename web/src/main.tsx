@@ -17,6 +17,7 @@ import './styles/supervisor.css'
 import './styles/worker.css'
 import './styles/viz.css'
 import { HeaderOnly, Layout } from './components/Layout'
+import { RequiresEdge } from './components/RequiresEdge'
 import { BuddyPage } from './pages/Buddy'
 import { ChoosePage } from './pages/Choose'
 import { CoachPage } from './pages/Coach'
@@ -38,21 +39,21 @@ createRoot(document.getElementById('root')!).render(
         <Route index element={<HomePage />} />
         <Route path="why" element={<WhyPage />} />
         <Route path="choose" element={<ChoosePage />} />
-        <Route path="worker" element={<WorkerPage />} />
-        <Route path="worker/:taskId" element={<WorkerTaskPage />} />
-        <Route path="supervisor" element={<SupervisorHomePage />} />
-        <Route path="buddy" element={<BuddyPage />} />
+        <Route path="worker" element={<RequiresEdge><WorkerPage /></RequiresEdge>} />
+        <Route path="worker/:taskId" element={<RequiresEdge><WorkerTaskPage /></RequiresEdge>} />
+        <Route path="supervisor" element={<RequiresEdge><SupervisorHomePage /></RequiresEdge>} />
+        <Route path="buddy" element={<RequiresEdge><BuddyPage /></RequiresEdge>} />
         {/* earlier build pages (dev / judging slices), kept under /lab */}
         <Route element={<Layout />}>
-          <Route path="lab" element={<SupervisorPage />} />
-          <Route path="video" element={<VideoPage />} />
-          <Route path="teach" element={<TeachPage />} />
-          <Route path="coach" element={<CoachPage />} />
-          <Route path="health" element={<HealthPage />} />
+          <Route path="lab" element={<RequiresEdge><SupervisorPage /></RequiresEdge>} />
+          <Route path="video" element={<RequiresEdge><VideoPage /></RequiresEdge>} />
+          <Route path="teach" element={<RequiresEdge><TeachPage /></RequiresEdge>} />
+          <Route path="coach" element={<RequiresEdge><CoachPage /></RequiresEdge>} />
+          <Route path="health" element={<RequiresEdge><HealthPage /></RequiresEdge>} />
         </Route>
         <Route element={<HeaderOnly />}>
-          <Route path="steps" element={<StepsPage />} />
-          <Route path="steps/:taskId" element={<StepsPage />} />
+          <Route path="steps" element={<RequiresEdge><StepsPage /></RequiresEdge>} />
+          <Route path="steps/:taskId" element={<RequiresEdge><StepsPage /></RequiresEdge>} />
         </Route>
         <Route path="*" element={<HomePage />} />
       </Routes>
