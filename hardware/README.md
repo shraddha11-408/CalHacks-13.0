@@ -4,7 +4,7 @@ Code for the glasses (Pi 5 camera) and the wrist node (Uno Q). See AGENTS.md §1
 
 The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in USB gadget mode** (Ethernet over its USB-C cable to the laptop; in bring-up it answered at `10.12.194.1`) and the **Uno Q talks USB serial** to the laptop.
 
-- **Wrist node (Uno Q):** a touch sensor plus the built-in LED matrix. The worker asks for help or for a spoken answer. The touch sensor replaced the button; the sketch and bridge are unchanged because both produce the same `DOWN` / `UP` events.
+- **Wrist node (Uno Q):** a touch sensor plus the built-in LED matrix. The worker asks for help or for a spoken answer. The touch sensor replaced the button. In the app, `edge/stepwise_edge/wrist.py` talks to the Uno over USB serial (see `wrist/README.md`); `backend/uno_serial_bridge.py` is the standalone test tool for the same protocol.
 - **Glasses (Pi 5):** a Logitech Brio 100 USB webcam (replaced the OV5647 CSI camera) streamed as MJPEG to the laptop. The Pi does no audio: voice in and out is the MacBook's mic and speaker (STT is Cartesia's).
 
 ## Files
@@ -12,7 +12,7 @@ The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in U
 | Path | What it is |
 |---|---|
 | `uno_q/wrist_node/wrist_node.ino` | Arduino sketch (MCU side): debounces the touch input, reports touches, drives the LED matrix |
-| `backend/uno_serial_bridge.py` | Laptop-side Python script: reads touch events over USB serial, classifies hold length, sends LED commands back |
+| `backend/uno_serial_bridge.py` | Standalone test tool: reads touch events over USB serial, classifies hold length, sends LED commands back. Finds the port itself (`UNO_PORT` overrides). Do not run it while the app is running: only one program can open the port |
 | `camera/uvc_streamer.py` | Runs on the Pi 5: USB webcam -> MJPEG over HTTP (ffmpeg copies the camera's MJPEG, no re-encode) |
 | `rec.sh`, `record.py` | `./rec.sh -s <seconds> -t <countdown>` records the Pi's video and microphone into one MP4 (+ a `.json` label file) on this laptop; needs ffmpeg |
 | `sync_check.py` | Measures how far the picture lags the sound in a clap recording and suggests `--av-offset` |
@@ -62,9 +62,7 @@ Right now both outcomes only print to the console. The next step is to forward t
 
 ```bash
 # 1. Flash wrist_node.ino to the Uno Q (Arduino IDE or arduino-cli)
-# 2. Find the serial port
-ls /dev/cu.usbmodem*
-# 3. Set PORT in backend/uno_serial_bridge.py, then:
+# 2. Run the bridge (it finds the port itself; UNO_PORT=COM5 forces one)
 pip install pyserial
 python hardware/backend/uno_serial_bridge.py
 ```
@@ -141,11 +139,11 @@ Print `camera/markers/tray_markers_a4.png` at **100% scale** (no "fit to page") 
 
 - Rectify is tested on synthetic views only. Run `rectify.py` against a live snapshot with the printed markers on the tray before relying on it.
 - `PORT` is hardcoded to one machine. Make it an env var or CLI argument before sharing.
-- The LED matrix shows a solid fill or blank. Distinct patterns for *help sent*, *help claimed* and *step done* (§14) are not built yet.
-- No reconnect handling if the USB cable is unplugged.
-- No tests for the wrist-node debounce and hold-length logic (AGENTS.md §26). The camera server has tests in `camera/test_stream.py`.
-- Uno Q serial is confirmed working (reported by the hardware owner, not measured here). Still worth checking: the touch sensor is momentary, a short touch (< 1.5 s) gives one flash and `TALK REQUEST`, a 1.5 s hold gives `HELP ALERT` and CALL.
+- The matrix has `ACK` (one flash) and `CALL` (help sent). Patterns for *help claimed* and *step done* (§14) are not built yet.
+- The bridge script has no reconnect. The app's `wrist.py` reconnects by itself (verified: unplugged, re-plugged 90 s later, touches came back with no restart).
+- Hold length and help routing are tested in the app (`edge/tests/test_wrist.py`, 20 tests); the bridge script itself has no tests. The camera server has tests in `camera/test_stream.py`.
+- Measured on the real Uno Q (2026-10-24): 17 quick taps were HIGH for 0.09-1.14 s and two 1 s presses for 1.06 and 1.23 s, all read as short; four 2-3 s holds were 2.20-2.77 s, all read as help, and `CALL` showed correctly on the 13x8 matrix. Early on, three quick taps read as 2.8-6.7 s (the sensor stayed HIGH); this did not happen again and the cause is unknown, so re-check with the sensor worn on the wrist.
 - Brio 100 low-light behavior and focus at 40-60 cm on the real tray are not tested; check once the camera is on the glasses mount.
-- `uvc_streamer.py` is started by hand over ssh. Nothing restarts it after a Pi reboot (a systemd unit would).
+- The stream starts by itself at boot (systemd `stepwise-camera`, see TESTING.md).
 - Voice in and out run on the MacBook (mic and speaker), so TTS leaks into the mic. Input must be ignored while TTS plays (AGENTS.md §14).
 - What a touch should do beyond help/talk is still undecided.

@@ -15,3 +15,10 @@ Arduino Uno Q wrist node: a touch sensor plus the built-in LED matrix, connected
 - A second hold on the same step does not page again; it shows `CALL` and the page says "Help is coming."
 - **Gap:** with no coaching session running, a hold only logs a warning and sends a `no_session` event; it reaches nobody.
 - `devices.wrist: keyboard` turns the wrist node off (use the page's buttons).
+
+## Verified on the real board (2026-10-24)
+
+- The port was found by vendor id with no setting (`/dev/cu.usbmodem...` on a Mac).
+- Measured on the real Uno Q (2026-10-24): 17 quick taps were HIGH for 0.09-1.14 s and two 1 s presses for 1.06 and 1.23 s, all read as short; four 2-3 s holds were 2.20-2.77 s, all read as help, and `CALL` showed correctly on the 13x8 matrix. Early on, three quick taps read as 2.8-6.7 s (the sensor stayed HIGH); this did not happen again and the cause is unknown, so re-check with the sensor worn on the wrist.
+- Unplugged: status went to "not connected", then "no Uno Q found; plug it in". Re-plugged 90 s later: connected again by itself and touches came through, with no restart.
+- Not verified here: the whole app (worker page speaking, help reaching a phone), because the app's dependencies were not installed on the test laptop.

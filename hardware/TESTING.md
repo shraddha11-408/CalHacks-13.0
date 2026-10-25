@@ -42,7 +42,7 @@ From `hardware/camera` (use `../.venv/bin/python`):
 | Video rate | `python receiver.py http://10.12.194.1:8000/stream --duration 10` | 15 fps, frame gap p50/p99 about 70/72 ms |
 | Microphone | `python audio_receiver.py http://10.12.194.1:8000/audio --seconds 10 --save a.wav` | 1.00x realtime, no clipping; play `a.wav` and check you can hear and understand yourself |
 | Live level | `python audio_receiver.py http://10.12.194.1:8000/audio --meter` | bars move when you talk |
-| Wrist node | `cd ../backend && ../.venv/bin/python uno_serial_bridge.py` | see "Wrist node" |
+| Wrist node | `cd ../backend && ../.venv/bin/python uno_serial_bridge.py` (not while the app runs) | see "Wrist node" |
 | Record video + sound | `cd .. && ./rec.sh -s 10 -t 3` (-s seconds to record, -t countdown first) | `recordings/<time>.mp4` with a video and an audio track (needs ffmpeg) |
 | Everything at once | `./start.sh` (from `hardware/`) | `ALL GOOD` |
 
@@ -50,10 +50,11 @@ Use the audio in your own code: `from audio_receiver import iter_pcm` then `for 
 
 ## 4. Wrist node (Arduino Uno Q)
 
-1. Flash `uno_q/wrist_node/wrist_node.ino` (Arduino IDE or App Lab). **The sketch with the 13x8 `CALL` frames has not been flashed or verified yet.**
+1. Flash `uno_q/wrist_node/wrist_node.ino` (Arduino IDE or App Lab). Verified on the real Uno Q (2026-10-24): `CALL` shows correctly on the 13x8 matrix.
 2. Plug the Uno Q into your laptop and run the bridge. It finds the port by itself (`/dev/cu.usbmodem*` on macOS, `/dev/ttyACM*` on Linux). Several boards plugged in, or Windows: `UNO_PORT=/dev/cu.usbmodemXXXX` (`UNO_PORT=COM5`).
 3. Short touch (< 1.5 s): one flash, prints `TALK REQUEST`. Long touch (>= 1.5 s): prints `HELP ALERT` and the matrix shows `CALL` for 2 s.
 4. Alignment check: send `TEST` over the serial port; a full one-pixel border should appear for 3 s.
+5. In the app the bridge is not needed: with `devices.wrist: uno_q` (the default) the edge app opens the port itself and `GET /health` shows `"wrist": "connected on ..."`. Close the bridge first. See `wrist/README.md`.
 
 ## 5. If something fails
 
