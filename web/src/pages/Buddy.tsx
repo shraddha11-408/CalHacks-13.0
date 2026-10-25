@@ -7,6 +7,7 @@ import { reducers, tables } from '../module_bindings'
 import { RaceLog } from '../components/RaceLog'
 import { useRegisterDevice } from '../lib/device'
 import { doubleClaims } from '../lib/claims'
+import '../styles/buddy.css'
 
 const NAME_KEY = 'idd-buddy-name'
 const readName = () => {
@@ -21,10 +22,10 @@ export function BuddyPage() {
   const [name, setName] = useState(readName)
   const [draft, setDraft] = useState('')
   return (
-    <AppShell back={{ to: '/choose', label: 'Back' }}>
+    <AppShell header="brand">
       {!name ? (
         <form
-          className="name-gate"
+          className="name-gate bd-gate"
           onSubmit={(e) => {
             e.preventDefault()
             const n = draft.trim()
@@ -37,11 +38,13 @@ export function BuddyPage() {
             setName(n)
           }}
         >
-          <label htmlFor="buddy-name" className="big-label">
-            Your name (help buddy)
+          <h1 className="bd-gate-h1">Be a help buddy</h1>
+          <p className="bd-gate-sub">We'll ping you when a coworker needs a hand.</p>
+          <label htmlFor="buddy-name" className="bd-gate-label">
+            Your name
           </label>
-          <input id="buddy-name" className="field field-xl" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Your name" />
-          <button className="btn btn-primary btn-xl" disabled={!draft.trim()}>
+          <input id="buddy-name" className="field bd-field" autoFocus value={draft} onChange={(e) => setDraft(e.target.value)} placeholder="Your name" />
+          <button className="btn btn-primary bd-btn" disabled={!draft.trim()}>
             Start getting alerts
           </button>
         </form>
@@ -78,46 +81,72 @@ function BuddyAlerts({ name, error, onChangeName }: { name: string; error: strin
     .filter((h) => h.status === 'open' || (h.status === 'claimed' && now - h.createdAt.toDate().getTime() < 600_000))
     .sort((a, b) => Number(b.id - a.id))
   const dc = doubleClaims(attempts)
+  const [skipped, setSkipped] = useState<Set<string>>(() => new Set())
+  const shown = recent.filter((h) => !skipped.has(String(h.id)))
+  // the loud screen: the newest open request; otherwise the newest claimed one (race result)
+  const h = shown.find((x) => x.status === 'open') ?? shown[0]
+  const skip = (id: bigint) => setSkipped((s) => new Set(s).add(String(id)))
 
   return (
-    <div className="stack" style={{ gap: 16 }}>
-      <div className="spread">
-        <h1 className="app-title" style={{ margin: 0 }}>
-          Help alerts
-        </h1>
-        <button className="btn btn-ghost" onClick={onChangeName}>
-          Not {name}?
-        </button>
-      </div>
-      <p className="small muted">
-        You're a help buddy. When a coworker presses help, it shows up here. Tap “I'm going” — the first tap wins, and everyone sees who's going.{' '}
-        <span className={`badge-soft num ${dc ? 'badge-urgent' : ''}`}>double-claims: {dc}</span>
-      </p>
-      {error && <p className="note-almost">{error}</p>}
-      {recent.length === 0 && <div className="empty">No one needs help right now. Keep this page open.</div>}
-      {recent.map((h) => {
-        const mine = attempts.filter((a) => a.helpId === h.id)
-        const myTry = [...mine].reverse().find((a) => a.by === name)
-        return (
-          <article key={String(h.id)} className={`alert ${h.status === 'open' ? 'alert-open' : ''}`}>
-            {h.photo ? <img src={apiUrl(h.photo)} alt={`What ${who(h.workerId)} sees`} /> : <div className="alert-nophoto" aria-hidden />}
-            <div className="stack" style={{ gap: 8, flex: 1 }}>
-              <strong className="alert-title">{who(h.workerId)} needs help</strong>
-              <span className="muted small">{stepText(h.taskId, h.stepId)}</span>
-              {h.status === 'open' ? (
-                <button className="btn btn-primary btn-xl btn-block" onClick={() => claim({ id: h.id, by: name }).catch(() => {})}>
-                  I'm going
-                </button>
-              ) : myTry?.won ? (
-                <p className="race-banner race-banner-won">You've got it! Go help {who(h.workerId)}.</p>
-              ) : (
-                <p className="race-banner">{h.claimedBy} is going. Thank you!</p>
-              )}
-              <RaceLog attempts={mine} me={name} />
+    <div className="bd-wrap">
+      <div className="bd-frame">
+        <section className="bd-screen water on-rio" aria-live="polite">
+          <div className="bd-top">
+            <p className="eyebrow">DRIGIL · BUDDY PHONE</p>
+            <button className="bd-who" onClick={onChangeName}>
+              Not {name}?
+            </button>
+          </div>
+          {error && <p className="bd-note">{error}</p>}
+          {!h ? (
+            <div className="bd-idle">
+              <span className="bd-ripple" aria-hidden>
+                <span /><span /><span />
+              </span>
+              <h1 className="bd-h1">No one needs a hand right now.</h1>
+              <p className="bd-ctx">You're on the list, {name}. Keep this page open. When a coworker asks for help, it shows up here.</p>
             </div>
-          </article>
-        )
-      })}
+          ) : (
+            (() => {
+              const mine = attempts.filter((a) => a.helpId === h.id)
+              const myTry = [...mine].reverse().find((a) => a.by === name)
+              const step = stepText(h.taskId, h.stepId)
+              const nm = who(h.workerId)
+              return (
+                <>
+                  {h.photo && <img className="bd-photo" src={apiUrl(h.photo)} alt={`What ${nm} sees`} />}
+                  <h1 className="bd-h1">{nm} needs a hand.</h1>
+                  <p className="bd-ctx">
+                    Step {h.stepId}
+                    {step ? `: ${step.replace(/\.$/, '')}` : ''}. You are the first one asked.
+                  </p>
+                  {h.status === 'open' ? (
+                    <div className="bd-actions">
+                      <button className="btn-sol bd-btn" onClick={() => claim({ id: h.id, by: name }).catch(() => {})}>
+                        I'll help
+                      </button>
+                      <button className="btn-outline bd-btn" onClick={() => skip(h.id)}>
+                        Not right now
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="bd-confirm">
+                      <p>{myTry?.won || h.claimedBy === name ? `You're on it. Go to ${nm}.` : `${h.claimedBy} is already going. Thank you!`}</p>
+                      <button className="btn-outline bd-btn" onClick={() => skip(h.id)}>
+                        OK
+                      </button>
+                    </div>
+                  )}
+                  <div className="bd-race">
+                    <RaceLog attempts={mine} me={name} />
+                  </div>
+                </>
+              )
+            })()
+          )}
+          <p className="bd-dc num">Claim race · double-claims {dc}</p>
+        </section>
+      </div>
     </div>
   )
 }

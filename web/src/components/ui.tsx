@@ -131,7 +131,7 @@ export function ConsentBanner({ ok, who, detail }: { ok: boolean; who: string; d
 /** Shows exactly what the voice said. aria-live so screen readers hear it too. */
 export function CaptionBar({ text, speaking, speaker = 'Coach voice' }: { text: string; speaking: boolean; speaker?: string }) {
   return (
-    <div className={`caption ${speaking ? '' : 'quiet'}`}>
+    <div className={`caption caption-bar on-rio ${speaking ? '' : 'quiet'}`}>
       <span className="caption-wave" aria-hidden>
         <i />
         <i />

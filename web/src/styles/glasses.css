@@ -1,0 +1,148 @@
+/* Scroll-linked smart glasses (GlassesSpin.tsx). Pure CSS 3D. */
+.glasses-spin {
+  --gs-scale: 1;
+  --gs-facing: 0;
+  --gs-shadow: 1;
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  height: clamp(300px, 52vw, 480px);
+  overflow: hidden;
+  display: grid;
+  place-items: center;
+  perspective: 1100px;
+  perspective-origin: 50% 40%;
+}
+.gs-scale {
+  width: 360px;
+  height: 136px;
+  transform: scale(var(--gs-scale));
+  transform-style: preserve-3d;
+}
+.gs-rig {
+  position: relative;
+  width: 360px;
+  height: 136px;
+  transform-style: preserve-3d;
+  transform: rotateX(8deg) rotateY(-28deg);
+  will-change: transform;
+}
+.gs-layer {
+  position: absolute;
+  inset: 0;
+  width: 360px;
+  height: 136px;
+  overflow: visible;
+}
+.gs-front { transform: translateZ(0); filter: drop-shadow(0 1px 0 rgba(255, 250, 240, 0.12)); }
+
+/* camera: small cylinder on the right end piece */
+.gs-cam {
+  position: absolute;
+  left: 326px;
+  top: 22px;
+  width: 26px;
+  height: 26px;
+  transform-style: preserve-3d;
+}
+.gs-cam-disc,
+.gs-cam-face {
+  position: absolute;
+  inset: 0;
+  border-radius: 50%;
+  background: #1c2224;
+}
+.gs-cam-face {
+  background: radial-gradient(circle at 35% 30%, #4a5558, #2A3133 60%, #0F3B3A);
+  box-shadow: inset 0 0 0 1.5px rgba(244, 238, 226, 0.25);
+}
+.gs-cam-lens {
+  position: absolute;
+  inset: 6px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 38% 34%, #9fc3be 0 8%, #12201f 22%, #050909 70%);
+  box-shadow: 0 0 0 1.5px #7FA5A0, 0 0 0 3px #1c2224;
+}
+.gs-cam-led {
+  position: absolute;
+  right: -1px;
+  top: -1px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: #F3C14B;
+  box-shadow: 0 0 6px 1px rgba(243, 193, 75, 0.8);
+  animation: gs-led 2.4s ease-in-out infinite;
+}
+@keyframes gs-led { 50% { opacity: 0.45; } }
+.gs-cone {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 220px;
+  height: 220px;
+  margin: -110px 0 0 -110px;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(127, 165, 160, 0.38), rgba(127, 165, 160, 0.12) 35%, transparent 68%);
+  transform: translateZ(14px);
+  opacity: var(--gs-facing);
+  pointer-events: none;
+}
+
+/* temple arms: planes rotated back into depth */
+.gs-temple {
+  position: absolute;
+  top: 34px;
+  width: 300px;
+  height: 11px;
+  transform-style: preserve-3d;
+  transform-origin: 0 50%;
+  transform: rotateY(90deg);
+}
+.gs-temple-l { left: 17px; }
+.gs-temple-r { left: 343px; }
+.gs-arm {
+  position: absolute;
+  inset: 0;
+  border-radius: 3px 6px 6px 3px;
+  background: linear-gradient(180deg, #3a4447, #2A3133 55%, #0F3B3A);
+  transform-style: preserve-3d;
+}
+.gs-arm:nth-child(2) { background: #1c2224; }
+.gs-hook {
+  position: absolute;
+  right: -46px;
+  top: 0;
+  width: 54px;
+  height: 11px;
+  border-radius: 3px 8px 8px 3px;
+  background: inherit;
+  transform-origin: 0 50%;
+  transform: rotateZ(32deg);
+}
+.gs-speaker {
+  position: absolute;
+  left: 196px;
+  top: 3px;
+  width: 30px;
+  height: 5px;
+  border-radius: 3px;
+  background: repeating-linear-gradient(90deg, #070b0b 0 2px, #1f2a2a 2px 4px);
+  box-shadow: 0 0 0 1px rgba(127, 165, 160, 0.35);
+}
+
+.gs-shadow {
+  position: absolute;
+  left: 50%;
+  bottom: 14%;
+  width: calc(340px * var(--gs-scale) * var(--gs-shadow));
+  height: 26px;
+  transform: translateX(-50%);
+  border-radius: 50%;
+  background: radial-gradient(closest-side, rgba(15, 59, 58, 0.28), transparent);
+  filter: blur(4px);
+}
+
+@media (max-width: 480px) {
+  .glasses-spin { height: 320px; }
+}

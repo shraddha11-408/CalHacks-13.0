@@ -252,7 +252,7 @@ export function CameraStage({
                 }
               }}
             >
-              ▶ Play again
+              Play again
             </button>
           </div>
         )}

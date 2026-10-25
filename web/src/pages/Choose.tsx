@@ -1,34 +1,42 @@
 import { Link } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
+import { BRAND } from '../components/Brand'
+
+const ico = (d: string) => (
+  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+    <path d={d} />
+  </svg>
+)
+
+const ROLES = [
+  { to: '/worker', title: 'I’m a worker', text: 'See my tasks. Get help step by step.', icon: ico('M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8zM4 21a8 8 0 0 1 16 0') },
+  { to: '/supervisor', title: 'I’m a supervisor', text: 'Help alerts, new tasks, worker progress.', icon: ico('M3 21V9l9-6 9 6v12M9 21v-6h6v6') },
+  { to: '/buddy', title: 'I’m a help buddy', text: 'Get a ping when a coworker needs a hand.', icon: ico('M7 2h10a1 1 0 0 1 1 1v18a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1zM11 18h2') },
+]
 
 export function ChoosePage() {
   return (
-    <AppShell back={{ to: '/', label: 'Home' }} title="Who is using IDD Help?">
-      <div className="choose">
-        <Link to="/worker" className="choice">
-          <span className="choice-icon" aria-hidden>
-            <svg viewBox="0 0 48 48" width="44" height="44">
-              <circle cx="24" cy="16" r="8" fill="none" stroke="currentColor" strokeWidth="3" />
-              <path d="M10 42 q14 -22 28 0" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          </span>
-          <span className="choice-title">I'm a worker</span>
-          <span className="choice-sub">See my tasks and get help step by step.</span>
-        </Link>
-        <Link to="/supervisor" className="choice">
-          <span className="choice-icon" aria-hidden>
-            <svg viewBox="0 0 48 48" width="44" height="44">
-              <rect x="8" y="10" width="32" height="30" rx="5" fill="none" stroke="currentColor" strokeWidth="3" />
-              <path d="M16 20h16M16 27h16M16 34h9" stroke="currentColor" strokeWidth="3" strokeLinecap="round" />
-            </svg>
-          </span>
-          <span className="choice-title">I'm a supervisor</span>
-          <span className="choice-sub">Help alerts, new tasks and worker reports.</span>
-        </Link>
-      </div>
-      <p className="small muted" style={{ marginTop: 18 }}>
-        A coworker helping out? Open <Link to="/buddy">the help buddy page</Link> on your phone.
-      </p>
+    <AppShell footer>
+      <section className="ch" aria-labelledby="ch-h1">
+        <p className="eyebrow">Open {BRAND}</p>
+        <h1 id="ch-h1">Who is using {BRAND}?</h1>
+        <p className="hm-sub">Pick one. You can switch any time from the top of the page.</p>
+        <ul className="ch-roles">
+          {ROLES.map((r) => (
+            <li key={r.to}>
+              <Link to={r.to} className="ch-role card">
+                <span className="ch-icon">{r.icon}</span>
+                <h2>{r.title}</h2>
+                <p>{r.text}</p>
+                <span className="ch-arrow" aria-hidden>
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M5 12h14M13 6l6 6-6 6" /></svg>
+                </span>
+              </Link>
+            </li>
+          ))}
+        </ul>
+        <p className="hm-note">Trying it out? The laptop camera and speaker stand in for the glasses.</p>
+      </section>
     </AppShell>
   )
 }

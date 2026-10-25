@@ -178,7 +178,7 @@
 }
 
 /* the spoken-caption bar under worker pages */
-.app-main .caption { margin-top: 22px; }
+.app-main .caption-bar { margin-top: 22px; }
 
 /* Always-on mic */
 .mic-chip { display: inline-flex; align-items: center; gap: 8px; border: 1px solid var(--line); background: var(--surface); color: var(--ink); border-radius: 999px; padding: 6px 14px; font-weight: 700; font-size: 15px; cursor: pointer; }

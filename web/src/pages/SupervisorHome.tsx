@@ -7,52 +7,84 @@ import { StdbGate } from '../components/Stdb'
 import { doubleClaims } from '../lib/claims'
 import { useRegisterDevice } from '../lib/device'
 import { fmtLatency } from '../format'
-import { api, type Step, type Task, type VideoJob, type WorkerReport } from '../lib/api'
+import { api, type Step, type Task, type VideoJob } from '../lib/api'
 import { apiUrl } from '../lib/audio'
 import { getMedia } from '../lib/media'
 import { openGlasses, openGlassesMic, type GlassesStream } from '../lib/glasses'
 import { reducers, tables } from '../module_bindings'
 import { STAGES } from '../lib/stages'
+import { levelOf } from '../lib/levels'
+import { IncomingCall } from '../components/IncomingCall'
+import { StepTimeline, SupportMeter, CorrectionBubble } from '../components/viz'
+import { EmptyState } from '../components/States'
+import { Dashboard } from '../components/dash/Dashboard'
+import '../styles/supervisor.css'
 
 const TABS = [
-  { key: 'help', label: 'Help alerts' },
+  { key: 'dash', label: 'Dashboard' },
+  { key: 'floor', label: 'Floor' },
+  { key: 'help', label: 'Help' },
   { key: 'add', label: 'Add a task' },
-  { key: 'report', label: 'Worker report' },
 ] as const
 type TabKey = (typeof TABS)[number]['key']
 
-const ago = (d: Date) => {
-  const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000))
-  return s < 60 ? `${s}s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : d.toLocaleString()
-}
-
-/** /supervisor — help alerts, add a task from a video, generate a worker report. */
+/** /supervisor — dashboard, live floor, help alerts, add a task from a video. */
 export function SupervisorHomePage() {
   const [params, setParams] = useSearchParams()
   const asked = params.get('tab')
-  const tab: TabKey = TABS.some((t) => t.key === asked) ? (asked as TabKey) : 'help'
+  const tab: TabKey = TABS.some((t) => t.key === asked) ? (asked as TabKey) : 'dash'
+  const [showTest, setShowTest] = useState(false)
   return (
-    <AppShell back={{ to: '/choose', label: 'Back' }}>
-      <h1 className="app-title">Supervisor</h1>
-      <nav className="tabs" role="tablist" aria-label="Supervisor">
-        {TABS.map((t) => (
-          <button key={t.key} role="tab" aria-selected={tab === t.key} className={`tab ${tab === t.key ? 'on' : ''}`} onClick={() => setParams({ tab: t.key })}>
-            {t.label}
-          </button>
-        ))}
-      </nav>
+    <AppShell footer>
+      <div className="sv">
+      <header className="sv-head">
+        <div>
+          <p className="eyebrow">DRIGIL · SUPERVISOR</p>
+          <h1 className="sv-title">Coach floor</h1>
+          <p className="sv-sub">Live view of your workers, help requests and progress.</p>
+        </div>
+        <label className="sv-test">
+          <input type="checkbox" checked={showTest} onChange={(e) => setShowTest(e.target.checked)} />
+          Include test data
+        </label>
+      </header>
       <StdbGate>
         {(err) => (
           <>
+            <IncomingCall />
+            <Tabs tab={tab} onPick={(k) => setParams({ tab: k })} />
             {err && <p className="note-almost">{err}</p>}
             <SupervisorDevice />
-            {tab === 'help' && <HelpTab />}
+            {tab === 'dash' && <DashTab showTest={showTest} />}
+            {tab === 'floor' && <Floor showTest={showTest} />}
+            {tab === 'help' && <HelpTab showTest={showTest} />}
             {tab === 'add' && <AddTaskTab />}
-            {tab === 'report' && <ReportTab />}
           </>
         )}
       </StdbGate>
+      </div>
     </AppShell>
+  )
+}
+
+/** Segmented tabs; Help shows the open count with a Sol dot when someone is waiting. */
+function Tabs({ tab, onPick }: { tab: TabKey; onPick: (k: TabKey) => void }) {
+  const [help] = useTable(tables.helpRequest)
+  const open = help.filter((h) => h.status === 'open').length
+  return (
+    <nav className="sv-tabs" role="tablist" aria-label="Coach floor sections">
+      {TABS.map((t) => (
+        <button key={t.key} role="tab" aria-selected={tab === t.key} className={`sv-tab ${tab === t.key ? 'on' : ''}`} onClick={() => onPick(t.key)}>
+          {t.label}
+          {t.key === 'help' && open > 0 && (
+            <span className="sv-count num" aria-label={`${open} open`}>
+              <span className="sv-sol-dot" aria-hidden />
+              {open}
+            </span>
+          )}
+        </button>
+      ))}
+    </nav>
   )
 }
 
@@ -60,6 +92,11 @@ export function SupervisorHomePage() {
 function SupervisorDevice() {
   useRegisterDevice('supervisor', 'Supervisor')
   return null
+}
+
+function DashTab({ showTest }: { showTest: boolean }) {
+  const { title, stepText, taskRows } = useStepLookup()
+  return <Dashboard lookup={{ title, stepText, taskCount: taskRows.length }} showTest={showTest} />
 }
 
 function useStepLookup() {
@@ -77,7 +114,7 @@ function useStepLookup() {
       taskRows,
       steps,
       title: (id: string) => taskRows.find((t) => t.id === id)?.title ?? taskName(id),
-      stepText: (taskId: string, stepId: number) => steps.get(taskId)?.find((s) => s.id === stepId)?.instruction ?? `Step ${stepId}`,
+      stepText: (taskId: string, stepId: number) => steps.get(taskId)?.find((s) => s.id === stepId)?.instruction ?? `${taskRows.find((t) => t.id === taskId)?.title ?? taskName(taskId)} · step ${stepId}`, // task deleted: still say which one
     }
   }, [taskRows])
 }
@@ -88,8 +125,139 @@ const taskName = (id: string) => {
   return s ? s[0].toUpperCase() + s.slice(1) : id
 }
 
+// ---------------- Coach floor: one card per live session ----------------
+const LIVE_HOURS = 3
+/** Test and demo data: workers, tasks and requests made while building drigil. Hidden unless "Include test data" is on. */
+const TEST_RE = /test|smoke|speed check|fadetest|agent_smoke|race|esc-test|mobile_test|browser_test/i
+const isTest = (...parts: string[]) => parts.some((p) => TEST_RE.test(p))
+const since_ = (d: Date) => {
+  const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000))
+  return s < 60 ? `${s} s` : s < 3600 ? `${Math.floor(s / 60)} min` : `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`
+}
+const clock = (d: Date) => {
+  const s = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000))
+  return s >= 3600 ? `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min` : `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`
+}
+function useTick(ms: number) {
+  const [, tick] = useState(0)
+  useEffect(() => {
+    const id = setInterval(() => tick((n) => n + 1), ms)
+    return () => clearInterval(id)
+  }, [ms])
+}
+
+function Floor({ showTest }: { showTest: boolean }) {
+  const [sessions] = useTable(tables.session)
+  const [workers] = useTable(tables.worker)
+  const [mastery] = useTable(tables.mastery)
+  const [talk] = useTable(tables.talkEvent)
+  const [help] = useTable(tables.helpRequest)
+  const [events] = useTable(tables.stepEvent)
+  const setLevel = useReducer(reducers.setSupportLevel)
+  const [err, setErr] = useState<string | null>(null)
+  const [showAll, setShowAll] = useState<Set<string>>(new Set())
+  const { steps, title } = useStepLookup()
+  useTick(15_000)
+  // live = unfinished sessions started in the last LIVE_HOURS, newest one per worker
+  // (tabs closed without "End task" never end, so old test sessions would pile up here)
+  const since = Date.now() - LIVE_HOURS * 3600_000
+  const newest = new Map<string, (typeof sessions)[number]>()
+  for (const s of sessions) {
+    if (s.endedAt || !steps.has(s.taskId) || s.startedAt.toDate().getTime() < since) continue
+    if (!showTest && isTest(s.workerId, workers.find((x) => x.id === s.workerId)?.name ?? '', title(s.taskId))) continue
+    const cur = newest.get(s.workerId)
+    if (!cur || s.startedAt.toDate().getTime() > cur.startedAt.toDate().getTime()) newest.set(s.workerId, s)
+  }
+  const live = [...newest.values()].sort((a, b) => {
+    const an = help.some((h) => h.sessionId === a.id && h.status === 'open') ? 1 : 0
+    const bn = help.some((h) => h.sessionId === b.id && h.status === 'open') ? 1 : 0
+    return bn - an || b.startedAt.toDate().getTime() - a.startedAt.toDate().getTime()
+  })
+  if (!live.length) return <EmptyState title="No one is working right now" text="Workers appear here when they start a task." />
+  return (
+    <>
+      {err && <p className="note-almost">{err}</p>}
+      <section className="sv-floor" aria-label="Workers on the floor">
+        {live.map((s) => {
+          const w = workers.find((x) => x.id === s.workerId)
+          const nm = w?.name ?? s.workerId
+          const st = steps.get(s.taskId) ?? []
+          const levels: Record<number, number> = {}
+          for (const m of mastery) if (m.workerId === s.workerId && m.taskId === s.taskId) levels[m.stepId] = m.level
+          const heard = [...talk].filter((t) => t.sessionId === s.id && t.answer).sort((a, b) => Number(b.id - a.id))[0]
+          const needs = help.find((h) => h.sessionId === s.id && h.status === 'open')
+          const finished = s.stepIndex >= st.length
+          const n = Math.min(s.stepIndex + 1, st.length)
+          const cur = st[Math.min(s.stepIndex, st.length - 1)]
+          // time on this step = since the last "step done" in this session (or since the session began)
+          let last = s.startedAt.toDate()
+          for (const e of events) if (e.sessionId === s.id && e.kind === 'done' && e.ts.toDate() > last) last = e.ts.toDate()
+          return (
+            <article key={s.id} className={`card sv-worker${needs ? ' needs' : ''}`}>
+              {needs && (
+                <Link className="sv-needs" to="/supervisor?tab=help">
+                  {nm} needs help on step {needs.stepId}. Open the request
+                </Link>
+              )}
+              <header className="sv-worker-head">
+                <h3 className="sv-name">{nm}</h3>
+                <span className="sv-mono num">{finished ? 'Finished' : `Step ${n} of ${st.length}`}</span>
+              </header>
+              <p className="sv-task">{title(s.taskId)}</p>
+              {cur && !finished && (
+                <div className="sv-now">
+                  {cur.reference_photo ? <img src={apiUrl(cur.reference_photo)} alt={cur.done_right} /> : <div className="sv-now-ph" aria-hidden />}
+                  <div className="sv-now-body">
+                    <p className="eyebrow">Right now</p>
+                    <p className="sv-now-text">{cur.instruction}</p>
+                    <p className="sv-facts">
+                      <span><b className="num">{since_(last)}</b> on this step</span>
+                      <span>Support: <b>{levelOf(levels[cur.id] ?? 0).name}</b></span>
+                    </p>
+                  </div>
+                </div>
+              )}
+              {finished && <p className="sv-done">Finished the task.</p>}
+              <StepTimeline steps={st.map((x) => ({ id: x.id, instruction: x.instruction, photo: x.reference_photo }))} current={s.stepIndex} finished={finished} size="sm" />
+              <ul className="sv-levels" aria-label="Support level per step">
+                {st.map((x, i) => (
+                  // the current step and the next one; the rest sit behind "All steps"
+                  <li key={x.id} hidden={!showAll.has(s.id) && (i < s.stepIndex || i > s.stepIndex + 1)}>
+                    <span className="sv-lv-step"><span className="num">{i + 1}</span> {x.instruction.replace(/[.!?]+$/, '')}</span>
+                    <SupportMeter
+                      level={levels[x.id] ?? 0}
+                      editable
+                      onChange={(lv) => {
+                        setErr(null)
+                        setLevel({ workerId: s.workerId, taskId: s.taskId, stepId: x.id, level: lv }).catch((e: Error) => setErr(`Could not change the support level: ${e.message}`))
+                      }}
+                    />
+                  </li>
+                ))}
+              </ul>
+              {st.length > 2 && (
+                <button className="btn btn-ghost btn-sm sv-all" onClick={() => setShowAll((x) => new Set(x.has(s.id) ? [...x].filter((y) => y !== s.id) : [...x, s.id]))}>
+                  {showAll.has(s.id) ? 'Show fewer steps' : `All ${st.length} steps`}
+                </button>
+              )}
+              {heard ? (
+                <div className="sv-heard">
+                  <p className="eyebrow">{nm} last heard</p>
+                  <CorrectionBubble name="Coach" text={heard.answer} />
+                </div>
+              ) : (
+                <p className="small muted">{nm} has not asked the coach anything yet.</p>
+              )}
+            </article>
+          )
+        })}
+      </section>
+    </>
+  )
+}
+
 // ---------------- Help alerts ----------------
-function HelpTab() {
+function HelpTab({ showTest }: { showTest: boolean }) {
   const [help] = useTable(tables.helpRequest)
   const [workers] = useTable(tables.worker)
   const [attempts] = useTable(tables.claimAttempt)
@@ -97,69 +265,70 @@ function HelpTab() {
   const claim = useReducer(reducers.claimHelp)
   const resolve = useReducer(reducers.resolveHelp)
   const { title, stepText } = useStepLookup()
-  const [, tick] = useState(0)
-  useEffect(() => {
-    const id = setInterval(() => tick((n) => n + 1), 5000)
-    return () => clearInterval(id)
-  }, [])
+  useTick(1000)
   const name = (id: string) => workers.find((w) => w.id === id)?.name ?? id
-  const sorted = [...help].sort((a, b) => Number(b.id - a.id))
-  const open = sorted.filter((h) => h.status !== 'resolved')
-  const done = sorted.filter((h) => h.status === 'resolved').slice(0, 10)
+  const shown = help.filter((h) => showTest || !isTest(h.workerId, name(h.workerId), h.taskId))
+  const sorted = [...shown].sort((a, b) => Number(b.id - a.id))
+  // open first (they are waiting), then claimed (someone is on the way); both newest first
+  const open = [...sorted.filter((h) => h.status === 'open'), ...sorted.filter((h) => h.status === 'claimed')]
+  const today = new Date().toDateString()
+  const done = sorted.filter((h) => h.status === 'resolved' && h.createdAt.toDate().toDateString() === today).slice(0, 20)
   return (
     <div className="stack" style={{ gap: 14 }}>
-      <p className="small muted">
-        Alerts also go to help buddies' phones (<Link to="/buddy">/buddy</Link>). The first “I'm going” wins.{' '}
-        <span className="badge-soft num">double-claims: {doubleClaims(attempts)}</span>
-      </p>
-      {open.length === 0 && <div className="empty">No one needs help right now.</div>}
-      {open.map((h) => (
-        <article key={String(h.id)} className={`alert ${h.status === 'open' ? 'alert-open' : ''}`}>
-          {h.photo ? <img src={apiUrl(h.photo)} alt={`What ${name(h.workerId)} sees`} /> : <div className="alert-nophoto" aria-hidden />}
-          <div className="stack" style={{ gap: 6, flex: 1 }}>
-            <div className="spread">
-              <strong className="alert-title">{name(h.workerId)} needs help</strong>
-              {h.status === 'open' ? <span className="badge-urgent">{ago(h.createdAt.toDate())}</span> : <span className="badge-claimed">{h.claimedBy} is going</span>}
-            </div>
-            {h.status === 'open' && (
-              <span className="small">
-                {routes.find((r) => r.helpId === h.id)?.routedTo === 'supervisor' ? (
-                  <strong style={{ color: 'var(--urgent)' }}>No buddy answered in 20 s, so it came to you.</strong>
-                ) : (
-                  <span className="muted">Sent to help buddies first. It comes to you if nobody answers in 20 s.</span>
-                )}
+      <p className="sv-sub">Requests go to help buddies' phones first, then to you. The first person to answer gets it.</p>
+      {open.length === 0 && <EmptyState title="No one needs help right now" text="Help requests from workers appear here the moment they are sent." />}
+      {open.map((h) => {
+        const route = routes.find((r) => r.helpId === h.id)?.routedTo
+        const isOpen = h.status === 'open'
+        return (
+          <article key={String(h.id)} className={`card sv-alert ${isOpen ? 'sv-alert-open' : ''}`}>
+            {h.photo ? <img src={apiUrl(h.photo)} alt={`What ${name(h.workerId)} sees`} /> : <div className="alert-nophoto" aria-hidden />}
+            <div className="stack" style={{ gap: 8, flex: 1, minWidth: 0 }}>
+              <div className="spread">
+                <strong className="sv-alert-title">{name(h.workerId)} {isOpen ? 'needs a hand' : 'has help coming'}</strong>
+                <span className="sv-wait num" aria-label="Waiting time">{isOpen ? `Waiting ${clock(h.createdAt.toDate())}` : `${h.claimedBy} is going`}</span>
+              </div>
+              <span className="sv-where">
+                {title(h.taskId)} · step <span className="num">{h.stepId}</span>: {stepText(h.taskId, h.stepId)}
               </span>
-            )}
-            <span className="muted">
-              {title(h.taskId)} · {stepText(h.taskId, h.stepId)}
-            </span>
-            <div className="row">
-              {h.status === 'open' ? (
-                <button className="btn btn-primary" onClick={() => claim({ id: h.id, by: 'Supervisor' }).catch(() => {})}>
-                  I'm going
-                </button>
-              ) : (
-                <button className="btn btn-secondary" onClick={() => resolve({ id: h.id, note: 'Helped in person' }).catch(() => {})}>
-                  Mark resolved
-                </button>
+              {isOpen && (
+                <span className="small">
+                  {route === 'supervisor' ? (
+                    <strong>No buddy answered in <span className="num">20 s</span>, so it came to you.</strong>
+                  ) : (
+                    <span className="muted">Sent to help buddies first. It comes to you if nobody answers in <span className="num">20 s</span>.</span>
+                  )}
+                </span>
               )}
+              <div className="row">
+                {isOpen ? (
+                  <button className="btn-sol" onClick={() => claim({ id: h.id, by: 'Supervisor' }).catch(() => {})}>
+                    I'll help
+                  </button>
+                ) : (
+                  <button className="btn-outline" onClick={() => resolve({ id: h.id, note: 'Helped in person' }).catch(() => {})}>
+                    Mark resolved
+                  </button>
+                )}
+              </div>
+              <RaceLog attempts={attempts.filter((a) => a.helpId === h.id)} me="Supervisor" />
             </div>
-            <RaceLog attempts={attempts.filter((a) => a.helpId === h.id)} me="Supervisor" />
-          </div>
-        </article>
-      ))}
+          </article>
+        )
+      })}
       {done.length > 0 && (
-        <details className="past">
-          <summary>Resolved ({done.length})</summary>
+        <details className="past card sv-past">
+          <summary>Earlier today{' '}<span className="num">({done.length})</span></summary>
           <ul className="plain-list">
             {done.map((h) => (
               <li key={String(h.id)} className="small">
-                <strong>{name(h.workerId)}</strong> · {title(h.taskId)} · {stepText(h.taskId, h.stepId)} <span className="muted">· {h.createdAt.toDate().toLocaleString()}</span>
+                <strong>{name(h.workerId)}</strong> · {title(h.taskId)} · {stepText(h.taskId, h.stepId)} <span className="muted num">· {h.createdAt.toDate().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}</span>
               </li>
             ))}
           </ul>
         </details>
       )}
+      <p className="sv-mono sv-foot num">Claim race · double-claims {doubleClaims(attempts)}</p>
     </div>
   )
 }
@@ -205,41 +374,69 @@ function AddTaskTab() {
   const running = !!job && job.stage !== 'done' && job.stage !== 'failed'
 
   return (
-    <div className="stack" style={{ gap: 18 }}>
-      <p className="muted">Do the task once in front of the camera and talk through it. Claude turns the video into simple steps.</p>
-      <section className="card consent">
-        <label className="row" style={{ alignItems: 'flex-start', gap: 10 }}>
-          <input type="checkbox" checked={cloneOk} onChange={(e) => setCloneOk(e.target.checked)} style={{ marginTop: 6 }} />
+    <div className="stack sv-add" style={{ gap: 16 }}>
+      <p className="sv-sub">Do the task once in front of the camera and talk through it. Claude turns the video into simple steps.</p>
+
+      <section className="card sv-step" aria-labelledby="add1">
+        <header className="sv-step-head">
+          <span className="sv-step-n num" aria-hidden>1</span>
+          <div>
+            <h2 id="add1" className="sv-step-title">Choose the coach's voice</h2>
+            <p className="small muted">Optional. Skip this to use the standard coach voice.</p>
+          </div>
+        </header>
+        <label className="sv-consent">
+          <input type="checkbox" checked={cloneOk} onChange={(e) => setCloneOk(e.target.checked)} />
           <span>
-            <strong>Coach in my voice.</strong> I agree that IDD Help may copy my voice from this video (Cartesia voice cloning), only to speak the
+            <strong>Yes, use my voice.</strong> I agree that drigil may copy my voice from this video (Cartesia voice cloning). It will only speak the
             instructions for these tasks. I can ask for it to be deleted at any time.
           </span>
         </label>
-        {cloneOk && <input className="field" placeholder="Your name (records your consent)" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Your name" />}
+        {cloneOk && <input className="field" placeholder="Type your full name to give consent" value={who} onChange={(e) => setWho(e.target.value)} aria-label="Your full name" />}
         {cloneOk && !who.trim() && <span className="small muted">Type your name to turn on voice cloning.</span>}
+        {consentBy && <span className="small sv-ok">Consent recorded for {consentBy}.</span>}
       </section>
-      <Recorder disabled={running} onDone={(f) => run(() => api.uploadVideo(f, consentBy))} />
-      <div className="row">
-        <input
-          ref={file}
-          type="file"
-          accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
-          className="visually-hidden"
-          onChange={(e) => {
-            const f = e.target.files?.[0]
-            if (f) void run(() => api.uploadVideo(f, consentBy))
-            e.target.value = ''
-          }}
-        />
-        <button className="btn btn-secondary" disabled={running} onClick={() => file.current?.click()}>
-          ⬆ Upload a video file
-        </button>
-        {demo && (
-          <button className="btn btn-ghost" disabled={running} onClick={() => run(() => api.analyzeDemo(consentBy))}>
-            Use the demo video
+
+      <section className="card sv-step" aria-labelledby="add2">
+        <header className="sv-step-head">
+          <span className="sv-step-n num" aria-hidden>2</span>
+          <div>
+            <h2 id="add2" className="sv-step-title">Show the task</h2>
+            <p className="small muted">Record it now, or upload a video you already have.</p>
+          </div>
+        </header>
+        <Recorder disabled={running} onDone={(f) => run(() => api.uploadVideo(f, consentBy))} />
+        <div className="row sv-or">
+          <input
+            ref={file}
+            type="file"
+            accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.m4v,.webm"
+            className="visually-hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              if (f) void run(() => api.uploadVideo(f, consentBy))
+              e.target.value = ''
+            }}
+          />
+          <button className="btn btn-secondary" disabled={running} onClick={() => file.current?.click()}>
+            Upload a video file
           </button>
-        )}
-      </div>
+          {demo && (
+            <button className="btn btn-ghost" disabled={running} onClick={() => run(() => api.analyzeDemo(consentBy))}>
+              Use the demo video
+            </button>
+          )}
+        </div>
+      </section>
+
+      <section className="card sv-step" aria-labelledby="add3">
+        <header className="sv-step-head">
+          <span className="sv-step-n num" aria-hidden>3</span>
+          <div>
+            <h2 id="add3" className="sv-step-title">Check the steps</h2>
+            <p className="small muted">{running ? 'Making your steps. This takes a minute.' : tasks?.length ? 'Read the steps, then open the task as a worker to try it.' : 'Your steps show up here after Claude watches the video.'}</p>
+          </div>
+        </header>
       {err && <p className="note-almost">{err}</p>}
       {job?.voice_error && <p className="note-almost">{job.voice_error}</p>}
       {running && job && (
@@ -267,13 +464,11 @@ function AddTaskTab() {
         </section>
       )}
       {tasks?.map((t) => (
-        <section key={t.task_id} className="card stack" style={{ gap: 12 }}>
+        <section key={t.task_id} className="sv-made stack" style={{ gap: 12 }}>
           <div className="spread">
-            <h2 className="section-title" style={{ margin: 0 }}>
-              {t.title}
-            </h2>
+            <h3 className="sv-made-title">{t.title}</h3>
             <Link className="btn btn-primary" to={`/worker/${t.task_id}`}>
-              Open as worker →
+              Open as worker
             </Link>
           </div>
           <span className="small muted">{t.voice ? `Instructions in ${t.voice.name}'s voice (cloned with consent).` : 'Instructions in the standard coach voice.'}</span>
@@ -291,6 +486,7 @@ function AddTaskTab() {
           </ol>
         </section>
       ))}
+      </section>
     </div>
   )
 }
@@ -389,17 +585,14 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
   }
 
   return (
-    <section className="card stack" style={{ gap: 12 }}>
-      <h2 className="section-title" style={{ margin: 0 }}>
-        Record a new video
-      </h2>
+    <div className="stack" style={{ gap: 12 }}>
       {(state === 'preview' || state === 'recording') && <video ref={live} className="rec-video" autoPlay muted playsInline />}
       {state === 'review' && clip && <video className="rec-video" src={clip.url} controls playsInline />}
       <div className="row">
         {state === 'idle' && (
           <>
             <button className="btn btn-primary" onClick={open} disabled={disabled}>
-              📷 Turn on camera
+              Turn on camera
             </button>
             <label className="row small" style={{ gap: 6 }}>
               Camera
@@ -425,15 +618,15 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
         )}
         {state === 'preview' && (
           <button className="btn btn-urgent" onClick={record}>
-            ● Start recording
+            Start recording
           </button>
         )}
         {state === 'recording' && (
           <>
             <button className="btn btn-primary" onClick={() => rec.current?.stop()}>
-              ■ Stop
+              Stop
             </button>
-            <span className="rec-dot num">● {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</span>
+            <span className="rec-dot num">REC {Math.floor(secs / 60)}:{String(secs % 60).padStart(2, '0')}</span>
           </>
         )}
         {state === 'review' && clip && (
@@ -457,238 +650,6 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
       {err && <p className="note-almost">{err}</p>}
       {note && <p className="small muted">{note}</p>}
       <p className="small muted">Faces are blurred in the photos that are kept. The video is deleted after the steps are made.</p>
-    </section>
-  )
-}
-
-// ---------------- Worker report ----------------
-const TREND: Record<string, { label: string; cls: string }> = {
-  improving: { label: 'Improving', cls: 'trend-good' },
-  steady: { label: 'Steady', cls: 'trend-flat' },
-  more_mistakes_lately: { label: 'Needs more support lately', cls: 'trend-watch' },
-  not_enough_data: { label: 'Not enough tries yet', cls: 'trend-flat' },
-}
-
-function ReportTab() {
-  const [workers] = useTable(tables.worker)
-  const [sessions] = useTable(tables.session)
-  const [events] = useTable(tables.stepEvent)
-  const [help] = useTable(tables.helpRequest)
-  const { steps, title, stepText } = useStepLookup()
-  const [who, setWho] = useState('')
-  const [rep, setRep] = useState<WorkerReport | null>(null)
-  const [busy, setBusy] = useState(false)
-  const [err, setErr] = useState<string | null>(null)
-  const current = who || workers[0]?.id || ''
-  const w = workers.find((x) => x.id === current)
-
-  const generate = async () => {
-    if (!w) return
-    setBusy(true)
-    setErr(null)
-    setRep(null)
-    try {
-      const mine = sessions.filter((s) => s.workerId === w.id)
-      const body = {
-        worker_name: w.name,
-        sessions: mine.map((s) => ({ id: s.id, task_id: s.taskId, task_title: title(s.taskId), started_at: s.startedAt.toDate().toISOString(), ended_at: s.endedAt ? s.endedAt.toDate().toISOString() : null, status: s.status, steps_total: steps.get(s.taskId)?.length ?? 0 })),
-        events: events
-          .filter((e) => e.workerId === w.id && ['done', 'mistake', 'skipped', 'help'].includes(e.kind))
-          .map((e) => ({ session_id: e.sessionId, task_id: e.taskId, step_id: e.stepId, step_text: stepText(e.taskId, e.stepId), kind: e.kind, note: e.note, ts: e.ts.toDate().toISOString() })),
-        help: help.filter((h) => h.workerId === w.id).map((h) => ({ task_id: h.taskId, step_text: stepText(h.taskId, h.stepId), status: h.status, created_at: h.createdAt.toDate().toISOString(), note: h.note })),
-      }
-      setRep(await api.report(body))
-    } catch (e) {
-      setErr((e as Error).message)
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  if (!workers.length) return <div className="empty">No workers yet. A worker appears here after they start a task.</div>
-  return (
-    <div className="stack" style={{ gap: 18 }}>
-      <div className="row no-print">
-        <label htmlFor="who" className="visually-hidden">
-          Worker
-        </label>
-        <select id="who" className="field" value={current} onChange={(e) => { setWho(e.target.value); setRep(null) }}>
-          {workers.map((x) => (
-            <option key={x.id} value={x.id}>
-              {x.name}
-            </option>
-          ))}
-        </select>
-        <button className="btn btn-primary" onClick={generate} disabled={busy}>
-          {busy ? 'Writing the report…' : 'Generate report'}
-        </button>
-        {rep && (
-          <button className="btn btn-ghost" onClick={() => window.print()}>
-            Print
-          </button>
-        )}
-      </div>
-      {err && <p className="note-almost">{err}</p>}
-      {rep && <ReportView rep={rep} />}
-    </div>
-  )
-}
-
-function ReportView({ rep }: { rep: WorkerReport }) {
-  const s = rep.stats
-  const r = rep.report
-  return (
-    <article className="report card">
-      <header className="report-head">
-        <div>
-          <h2 className="report-title">{rep.worker}</h2>
-          <span className="small muted">Report · {new Date(rep.generated_at * 1000).toLocaleString()}</span>
-        </div>
-        <div className="summary-stats">
-          <div>
-            <span className="stat-v num">{s.sessions}</span>
-            <span className="stat-l">tries</span>
-          </div>
-          <div>
-            <span className="stat-v num">{s.tasks.length}</span>
-            <span className="stat-l">tasks</span>
-          </div>
-          <div>
-            <span className="stat-v num">{s.mistakes_total}</span>
-            <span className="stat-l">corrections</span>
-          </div>
-          <div>
-            <span className="stat-v num">{s.help_requests}</span>
-            <span className="stat-l">help requests</span>
-          </div>
-        </div>
-      </header>
-
-      {!s.sessions && <p className="muted">No sessions recorded for this worker yet.</p>}
-      {r && (
-        <section className="report-sec">
-          <p className="report-summary">{r.summary}</p>
-          <div className="report-cols">
-            <ReportList title="Strengths" items={r.strengths} />
-            <ReportList title="Needs support with" items={r.needs_support} />
-          </div>
-          <h3>Has it improved?</h3>
-          <p>{r.improvement}</p>
-          <ReportList title="Next steps for the coach" items={r.recommendations} />
-          <div className="for-worker">
-            <span className="small muted">To read to {rep.worker}</span>
-            <p>{r.for_worker}</p>
-          </div>
-        </section>
-      )}
-      {s.sessions > 0 && !r && <p className="note-almost">Claude could not write the summary right now. The measured numbers below are still correct.</p>}
-
-      <section className="report-sec">
-        <h3>Tasks</h3>
-        <div className="stack" style={{ gap: 14 }}>
-          {s.tasks.map((t) => (
-            <div key={t.task_id} className="report-task">
-              <div className="spread">
-                <strong>{t.title}</strong>
-                <span className={`trend ${TREND[t.trend].cls}`}>{TREND[t.trend].label}</span>
-              </div>
-              <span className="small muted">
-                Done {t.times_done} {t.times_done === 1 ? 'time' : 'times'}, finished {t.times_finished} · {t.mistakes_total} corrections
-              </span>
-              <AttemptBars values={t.mistakes_per_attempt} />
-              {t.hardest_steps.length > 0 && (
-                <span className="small">
-                  <span className="muted">Hardest steps:</span> {t.hardest_steps.map((h) => `${h.step} (${h.mistakes})`).join(' · ')}
-                </span>
-              )}
-              {t.attempts.some((a) => a.mistake_notes.length) && (
-                <details>
-                  <summary className="small">Every correction</summary>
-                  <ul className="plain-list small">
-                    {t.attempts.flatMap((a, k) => a.mistake_notes.map((n, j) => (
-                      <li key={`${k}-${j}`}>
-                        Try {k + 1} · {n.step}: <span className="muted">{n.what}</span>
-                      </li>
-                    )))}
-                  </ul>
-                </details>
-              )}
-            </div>
-          ))}
-        </div>
-      </section>
-      {rep.notes.length > 0 && (
-        <section className="report-sec">
-          <h3>Notes remembered about {rep.worker}</h3>
-          <ul className="plain-list small">
-            {rep.notes.map((n, k) => (
-              <li key={k}>{n}</li>
-            ))}
-          </ul>
-        </section>
-      )}
-      <footer className="small muted">Numbers are measured from this worker's sessions. Words written by Claude{rep.latency_ms ? ` in ${fmtLatency(rep.latency_ms)}` : ''}.</footer>
-    </article>
-  )
-}
-
-function ReportList({ title, items }: { title: string; items: string[] }) {
-  return (
-    <div>
-      <h3>{title}</h3>
-      <ul className="dot-list">
-        {items.map((x, k) => (
-          <li key={k}>{x}</li>
-        ))}
-      </ul>
-    </div>
-  )
-}
-
-/** Corrections per try, oldest → newest. One series: amber like every mistake in the app; latest value labelled. */
-function AttemptBars({ values }: { values: number[] }) {
-  const [hover, setHover] = useState<number | null>(null)
-  if (!values.length) return null
-  const max = Math.max(1, ...values)
-  const bw = 22
-  const gap = 6
-  const H = 70 // baseline; the top 14px leave room for the value label
-  const W = Math.max(values.length * (bw + gap), 90)
-  return (
-    <div className="attempts">
-      <svg viewBox={`0 0 ${W + 8} ${H + 18}`} width={Math.min(W + 8, 520)} role="img" aria-label={`Corrections per try, oldest first: ${values.join(', ')}`}>
-        <line x1={0} x2={W} y1={H} y2={H} stroke="var(--line)" />
-        {values.map((v, k) => {
-          const h = Math.max(6, (v / max) * (H - 22)) // 4px rounded top; label room above
-          const x = k * (bw + gap)
-          return (
-            <g key={k} onMouseEnter={() => setHover(k)} onMouseLeave={() => setHover(null)}>
-              <rect x={x - 2} y={0} width={bw + gap} height={H + 18} fill="transparent" />
-              {v > 0 ? <path d={`M${x},${H} v${-(h - 4)} a4,4 0 0 1 4,-4 h${bw - 8} a4,4 0 0 1 4,4 v${h - 4} z`} style={{ fill: 'var(--almost-fill)', opacity: hover === null || hover === k ? 1 : 0.55 }} /> : <rect x={x} y={H - 2} width={bw} height={2} rx={1} fill="var(--line)" />}
-              {(k === values.length - 1 || hover === k) && (
-                <text x={x + bw / 2} y={H - h - 4} textAnchor="middle" fontSize="11" fill="var(--ink-2)" className="num">
-                  {v}
-                </text>
-              )}
-              <title>{`Try ${k + 1}: ${v} correction${v === 1 ? '' : 's'}`}</title>
-            </g>
-          )
-        })}
-        {values.length > 1 ? (
-          <>
-            <text x={0} y={H + 14} fontSize="10" fill="var(--ink-2)">
-              oldest
-            </text>
-            <text x={W} y={H + 14} fontSize="10" fill="var(--ink-2)" textAnchor="end">
-              newest
-            </text>
-          </>
-        ) : (
-          <text x={0} y={H + 14} fontSize="10" fill="var(--ink-2)">
-            1 try
-          </text>
-        )}
-      </svg>
     </div>
   )
 }

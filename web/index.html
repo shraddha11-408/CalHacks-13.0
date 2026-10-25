@@ -5,7 +5,16 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="color-scheme" content="light dark" />
-    <title>Stepwise</title>
+    <meta name="theme-color" content="#ECE8E1" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#0E1C1C" media="(prefers-color-scheme: dark)" />
+    <script>
+      /* set the theme before first paint (no flash); theme.ts takes over after load */
+      try {
+        var t = localStorage.getItem('drigil-theme') || localStorage.getItem('stepwise-theme')
+        if (t === 'light' || t === 'dark') document.documentElement.setAttribute('data-theme', t)
+      } catch (e) {}
+    </script>
+    <title>drigil</title>
   </head>
   <body>
     <div id="root"></div>

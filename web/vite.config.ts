@@ -20,6 +20,7 @@ export default defineConfig({
     port: 5173,
     https,
     host: true, // also on this laptop's network address, so phones on the same Wi-Fi can open it
+    allowedHosts: ['.trycloudflare.com'], // temporary phone link (cloudflared quick tunnel) when the Wi-Fi blocks phone → laptop
     // Edge app (FastAPI) on :8000, reached as /api/* from the browser.
     proxy: {
       '/api': {
