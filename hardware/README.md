@@ -14,6 +14,9 @@ The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in U
 | `uno_q/wrist_node/wrist_node.ino` | Arduino sketch (MCU side): debounces the touch input, reports touches, drives the LED matrix |
 | `backend/uno_serial_bridge.py` | Laptop-side Python script: reads touch events over USB serial, classifies hold length, sends LED commands back |
 | `camera/uvc_streamer.py` | Runs on the Pi 5: USB webcam -> MJPEG over HTTP (ffmpeg copies the camera's MJPEG, no re-encode) |
+| `record.py` | Records the Pi's video and microphone into one MP4 (+ a `.json` label file) on this laptop; needs ffmpeg |
+| `sync_check.py` | Measures how far the picture lags the sound in a clap recording and suggests `--av-offset` |
+| `doctor.py`, `start.sh` | One-command check of the whole chain (see TESTING.md) |
 | `camera/mjpeg_http.py` | Stdlib HTTP server shared by the streamer and the test servers (`/stream`, `/snapshot.jpg`, `/health`, `/audio`) |
 | `camera/audio_capture.py` | Runs on the Pi: captures the Brio's built-in microphone with `arecord` (16 kHz mono s16le, 100 ms chunks), sets the gain, restarts `arecord` if it dies |
 | `camera/audio_receiver.py` | Laptop side: reads `/audio`, prints rate and level (`--save a.wav`, `--meter`); `iter_pcm(url)` yields 100 ms int16 chunks for STT |
@@ -103,6 +106,19 @@ The server keeps only the newest frame, so a slow client skips frames instead of
 - **Measured** with the Brio on the Pi, speaking close to the camera, video streaming at the same time: **1.00x realtime**, peak -7.4 dBFS, loudest 100 ms -17.8 dBFS, background about -36 dBFS, no clipping. Video stayed at 15.0 fps.
 - Audio arrives in about 125 ms bursts (the ALSA period), not smooth 100 ms chunks. Latency from the mic to the laptop was not measured.
 - Not tested: speech recognition on this stream (STT is Cartesia's code, not wired to `/audio` yet), and the noise level in a busy hall.
+
+## Recording video with sound (laptop)
+
+```bash
+.venv/bin/python record.py                                  # until Ctrl-C, into recordings/<time>.mp4
+.venv/bin/python record.py --seconds 20 --label correct --step s1
+.venv/bin/python sync_check.py recordings/<clip>.mp4        # after clapping 3 times in view: picture-vs-sound offset
+```
+
+One MP4 (H.264 + AAC), 480x640 portrait at about 15 fps, with a `.json` next to it holding the label and settings (for the eval clips). `recordings/` is git-ignored.
+
+- **Sync:** the picture arrives later than the sound. `record.py` delays the audio by `--av-offset` (default **0.28 s**) to compensate. Measured with claps on 2026-10-24: 0.22-0.24 s late with no correction, 0.10-0.12 s late with 0.23 s. The lag moves by about 0.1 s between runs, so expect up to about 0.06 s of error. Re-measure with `sync_check.py` and pass `--av-offset` if it matters.
+- Only the video input uses wall-clock timestamps. Without them ffmpeg assumes 25 fps and the clip plays too fast; with them on the audio input too, the audio was dropped.
 
 ## ArUco markers and rectify
 
