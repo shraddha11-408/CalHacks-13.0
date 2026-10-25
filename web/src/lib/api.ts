@@ -184,9 +184,32 @@ async function j<T>(r: Response): Promise<T> {
   return r.json()
 }
 
+/** Droid calls keep the HTTP status so the UI can say "already on it" (409) or "not ready yet" (404). */
+export class DroidHttpError extends Error {
+  status: number
+  constructor(status: number, message: string) {
+    super(message)
+    this.status = status
+  }
+}
+async function droidFetch<T>(path: string, init?: RequestInit): Promise<T> {
+  const r = await fetch(`/api${path}`, init)
+  if (!r.ok) {
+    let msg = r.statusText
+    try { const b = await r.json(); msg = typeof b.detail === 'string' ? b.detail : msg } catch { /* not json */ }
+    throw new DroidHttpError(r.status, msg)
+  }
+  return r.json()
+}
+const droidPost = <T>(path: string, body: unknown = {}) => droidFetch<T>(path, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) })
+
 const post = <T>(path: string, body: unknown) => fetch(`/api${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<T>)
 
 export const api = {
+  droidReteach: (taskId: string, stepId: number, reason?: string) => droidPost<{ job_id: string }>('/droid/reteach', { task_id: taskId, step_id: stepId, trigger: 'supervisor', ...(reason ? { reason } : {}) }),
+  droidJobs: () => droidFetch<unknown[]>('/droid/jobs'),
+  droidApprove: (id: string) => droidPost<unknown>(`/droid/jobs/${encodeURIComponent(id)}/approve`),
+  droidReject: (id: string) => droidPost<unknown>(`/droid/jobs/${encodeURIComponent(id)}/reject`),
   config: (taskId?: string) => fetch(`/api/public-config${taskId ? `?task_id=${encodeURIComponent(taskId)}` : ''}`).then(j<PublicConfig>),
   tasks: () => fetch('/api/tasks').then(j<{ task_id: string; title: string; steps: number }[]>),
   task: (id: string) => fetch(`/api/tasks/${id}`).then(j<Task>),

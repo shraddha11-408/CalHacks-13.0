@@ -300,7 +300,37 @@ const agentStats = table(
   }
 );
 
+// Droid re-teach jobs (docs/DROID.md): edge writes, the supervisor dashboard subscribes.
+const droidJob = table(
+  { name: 'droid_job', public: true },
+  {
+    id: t.string().primaryKey(),
+    taskId: t.string(),
+    stepId: t.u32(),
+    trigger: t.string(), // auto | supervisor
+    reason: t.string(),
+    status: t.string(), // queued | running | proposed | failed | approved | rejected
+    plan: t.string(),
+    summary: t.string(),
+    proposal: t.string(), // JSON of proposed.json
+    createdAt: t.timestamp(),
+    updatedAt: t.timestamp(),
+  }
+);
+
+const droidEvent = table(
+  { name: 'droid_event', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    jobId: t.string().index('btree'),
+    kind: t.string(),
+    text: t.string(),
+    at: t.timestamp(),
+  }
+);
+
 const spacetimedb = schema({
+  droidJob, droidEvent,
   worker, task, session, stepEvent, helpRequest, talkEvent, claimAttempt,
   device, mastery, stepOutcome, levelChange, helpRoute, wristCall, helpEscalationTimer, workerProgress, rollupTimer, presenceTimer,
   agentCall, agentTurn, agentToolCall, agentStats,
@@ -535,6 +565,25 @@ export const recordStepOutcome = spacetimedb.reducer(
     ctx.db.stepOutcome.insert({ id: 0n, sessionId, workerId, taskId, stepId, outcome, levelBefore: before, levelAfter: level, reason, by: edge.name, ts: ctx.timestamp });
     if (reason) ctx.db.levelChange.insert({ workerId, taskId, stepId, fromLevel: before, toLevel: level, reason, by: 'rules' });
     ctx.db.device.identity.update({ ...edge, online: true, lastSeen: ctx.timestamp });
+  }
+);
+
+// ═════════════ Droid re-teach jobs (edge-only writes) ═════════════
+export const droidJobSet = spacetimedb.reducer(
+  { id: t.string(), taskId: t.string(), stepId: t.u32(), trigger: t.string(), reason: t.string(), status: t.string(), plan: t.string(), summary: t.string(), proposal: t.string() },
+  (ctx, a) => {
+    requireRole(ctx, 'edge');
+    const old = ctx.db.droidJob.id.find(a.id);
+    if (old) ctx.db.droidJob.id.update({ ...a, createdAt: old.createdAt, updatedAt: ctx.timestamp });
+    else ctx.db.droidJob.insert({ ...a, createdAt: ctx.timestamp, updatedAt: ctx.timestamp });
+  }
+);
+
+export const droidEventLog = spacetimedb.reducer(
+  { jobId: t.string(), kind: t.string(), text: t.string() },
+  (ctx, { jobId, kind, text }) => {
+    requireRole(ctx, 'edge');
+    ctx.db.droidEvent.insert({ id: 0n, jobId, kind, text: text.slice(0, 500), at: ctx.timestamp });
   }
 );
 

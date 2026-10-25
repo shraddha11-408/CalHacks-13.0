@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import { useTable } from 'spacetimedb/react'
 import { tables } from '../../module_bindings'
 import '../../styles/dash.css'
+import { AskDroid, DroidPanel, useDroidJobs } from './DroidPanel'
 
 /**
  * Supervisor dashboard. Every number is computed from live SpacetimeDB rows and answers one question
@@ -77,6 +78,7 @@ export function Dashboard({ lookup, showTest }: { lookup: DashLookup; showTest?:
   const [who, setWho] = useState<string>('all')
   const [ownTest, setWithTest] = useState(false)
   const withTest = showTest ?? ownTest
+  const droid = useDroidJobs()
   const [focus, setFocus] = useState<string | null>(null) // `${taskId}#${stepId}` in the re-teach list
 
   // ---- one filter for test data, applied to every table
@@ -292,6 +294,7 @@ export function Dashboard({ lookup, showTest }: { lookup: DashLookup; showTest?:
                     { n: m.help, cls: 'help', label: 'help requests' },
                   ],
                   meta: cleanMeta(lookup.title(m.taskId), lookup.stepText(m.taskId, m.stepId)),
+                  action: <AskDroid taskId={m.taskId} stepId={m.stepId} jobs={droid.jobs} />,
                 }))}
               />
               <Legend items={[['err', 'Corrections'], ['ast', 'Hints'], ['help', 'Help requests']]} />
@@ -311,6 +314,10 @@ export function Dashboard({ lookup, showTest }: { lookup: DashLookup; showTest?:
               )}
             </>
           )}
+        </Panel>
+
+        <Panel id="dash-droid" className="span-12" title="Droid · re-teach engineer" sub="When a step keeps causing trouble, Factory Droid rewrites it in a sandbox. Nothing changes until you approve.">
+          <DroidPanel jobs={droid.jobs} offline={droid.offline} lookup={lookup} />
         </Panel>
 
       </div>
@@ -423,7 +430,7 @@ function LineChart({ series, name, onPick }: { series: { w: string; pts: { t: nu
   )
 }
 
-type BarRow = { key: string; label: string; meta?: string; badge?: string; parts: { n: number; cls: string; label: string }[] }
+type BarRow = { action?: React.ReactNode; key: string; label: string; meta?: string; badge?: string; parts: { n: number; cls: string; label: string }[] }
 function Bars({ rows, onPick, selected }: { rows: BarRow[]; onPick?: (k: string) => void; selected?: string | null }) {
   const max = Math.max(1, ...rows.map((r) => r.parts.reduce((a, p) => a + p.n, 0)))
   const seen = new Set<string>()
@@ -450,6 +457,7 @@ function Bars({ rows, onPick, selected }: { rows: BarRow[]; onPick?: (k: string)
             ) : (
               <div className="dash-bar-row" tabIndex={0} title={`${r.label}: ${detail}`} aria-label={`${r.label}: ${detail}`}>{inner}</div>
             )}
+            {r.action}
           </li>
         )
       })}

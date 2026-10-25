@@ -48,13 +48,15 @@ The mapping from method to evidence to feature, with 27 sources, is in [docs/IDD
    using the live camera frame.
 4. **Remember.** Moss keeps short notes about each worker ("Jordan turned the sleeve backwards"). Next time, before
    that step, the coach says "Remember: …".
-5. **Fade.** Every finished step is recorded in SpacetimeDB. 3 clean runs in a row lower that step's support one
+5. **Re-teach with Droid.** If the same step causes 2 corrections or help requests within an hour, Factory Droid
+   rewrites that step in a sandbox. The supervisor sees its live work and a before-and-after, and approves.
+6. **Fade.** Every finished step is recorded in SpacetimeDB. 3 clean runs in a row lower that step's support one
    level; 2 errors in the last 5 raise it. Level-ups are celebrated out loud. Steps back are never announced to the
    worker.
-6. **Help is one tap away.** "Help" (voice or button) pages a coworker **buddy** first. Two buddies race to claim it
+7. **Help is one tap away.** "Help" (voice or button) pages a coworker **buddy** first. Two buddies race to claim it
    and exactly one wins. After 20 s it escalates to the supervisor. The **wristband** (Arduino Uno Q + touch sensor)
    calls the supervisor directly, and the supervisor page rings on every tab.
-7. **Supervisor dashboard.** Who is working now and who needs help, who is getting more independent, which steps
+8. **Supervisor dashboard.** Who is working now and who needs help, who is getting more independent, which steps
    need re-teaching, and how fast help arrives, all live from SpacetimeDB.
 
 Pages: `/` landing · `/why` the research · `/worker` the worker's workday · `/supervisor` dashboard, floor, help, add
@@ -148,6 +150,30 @@ We used Bitdeer Model Studio's OpenAI-compatible API to pick and tune the vision
 GLM-5.3-Flash on Bitdeer had the best accuracy and the fewest false corrections of anything we tried. At about
 4.4 s per look it was too slow for the live stream, so live checks use Claude Sonnet (about 2.2 s). Switching back is
 one call in `api.run_check`.
+
+### Factory Droid SDK (the re-teach engineer)
+When a step keeps tripping a worker up, **Droid rewrites that step of the task**. It splits a step that hides two
+actions, writes a correction that names the exact fix, adds a "Remember" tip, or flags a close look. A supervisor
+approves before anything goes live. Contract: [docs/DROID.md](docs/DROID.md). Runner:
+[droid/reteach.mjs](droid/reteach.mjs). Edge side: [droid.py](edge/stepwise_edge/droid.py).
+- **Triggers we designed:**
+  - **Data event:** 2 spoken corrections or help requests on the same step within an hour start a job
+    automatically, at most one per step per hour.
+  - **User action:** "Ask Droid to fix this step" on the dashboard's re-teach list.
+- **What Droid can touch:** a fresh sandbox folder per job (`droid/sandboxes/<job_id>/`). It holds only the task,
+  an evidence file (what went wrong, the corrections spoken, Moss notes, with worker names removed), a rules file and
+  a validator. There is no repo, no code and no keys. Droid runs with the SDK at medium autonomy and may write only
+  `proposed.json`.
+- **Safety built in:** the runner, not Droid, re-runs the validator. It checks the schema, that corrections start
+  with "Almost.", that no sentence is over 14 words, and that there are no names or URLs. Anything that fails is
+  marked failed. Nothing changes the live task until the supervisor taps **Approve**. Approving replaces the step,
+  renumbers the task and pre-records the new lines in the supervisor's cloned voice.
+- **Visible work:** every Droid event (plan, tool calls, results, the runner's validation) streams into SpacetimeDB
+  (`droid_job`, `droid_event`). The supervisor dashboard shows it live, with a before-and-after of the step and
+  Approve / Reject.
+- **Measured:** a real run on the coffee-sleeve step took about 35 s with 35 streamed events, the runner's
+  validation passed, and Droid split "Pick up the sleeve. Turn it so you can read the words. Make the words right
+  side up." into two smaller steps.
 
 ### Meta: Bringing People Closer Together
 Help goes to a **person who works next to them** before it goes to a manager. "I'm stuck" pages a coworker buddy's
@@ -250,8 +276,8 @@ or `--simulate` without hardware. Details are in [wrist/README.md](wrist/README.
 
 ## What we tried and cut
 
-- **Factory Droid** compiled and tested a per-step image checker in a sandbox during our kill-tests
-  ([droid/](droid/)). It is not wired into the running product, so we are not claiming it.
+- **A Droid-compiled image checker per step** (our first idea for Droid) worked in a kill-test, but rule-based
+  checks were too fragile on a webcam. Droid now does the re-teaching job above instead.
 - **ArUco tray rectification and classical CV checkers** ([cvlib/](cvlib/)) were replaced by a vision model that
   sees the whole step list, which works on any table and camera angle.
 - **A Cartesia voice-agent mode** ([agent.py](edge/stepwise_edge/agent.py)) was replaced by the always-on mic,

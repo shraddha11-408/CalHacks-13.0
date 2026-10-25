@@ -198,10 +198,32 @@ Before handing work back:
 
 ## 11. Not in the product (kept for later; don't advertise)
 
-- **Factory Droid** checker compiler ([droid/](droid/)): passed a kill-test, but it is not wired into the running
-  product.
+- **Droid-compiled image checkers** (`droid/kt_droid.mjs`, `droid/checker-template/`): passed a kill-test, but
+  they're replaced by the re-teach engineer (§12).
 - **ArUco tray rectification and classical CV checkers** ([cvlib/](cvlib/), `edge/stepwise_edge/pipeline.py`).
 - **Cartesia voice agent:** `agent.py` and the `/coach/{sid}/agent*` endpoints. It was replaced by the always-on mic
   because it could not see the camera.
 - **Gemini and the Haiku/Sonnet split for live checks:** removed for simplicity and better mistake recall.
 - **Pi 5 camera streaming:** written, but the demo uses the laptop webcam or an uploaded video.
+
+## 12. Droid: the re-teach engineer
+
+The contract is [docs/DROID.md](docs/DROID.md). Keep it and the code in step.
+
+**Triggers.** `api.note_trouble` logs each spoken correction and help request per step. At 2 in 60 min it starts an
+`auto` job. The dashboard button starts a `supervisor` job.
+
+**Flow.**
+1. `droid.py` builds `droid/sandboxes/<job_id>/` (git-ignored) containing `AGENTS.md`, `validate.py`, `task.json`
+   and `evidence.md`. Worker names are removed from the evidence.
+2. It spawns `node droid/reteach.mjs <sandbox>`, which streams NDJSON events to stdout.
+3. Each event is forwarded to the `droid_job_set` and `droid_event_log` reducers, and each job is saved to
+   `data/droid/<job_id>.json`.
+
+**Safety.**
+- Droid runs at medium autonomy with the sandbox as its working directory, and may write only `proposed.json`.
+- The runner always re-runs `validate.py` itself and never trusts Droid's claim.
+- A supervisor's Approve is the only way a proposal changes a task. `approve` replaces the step, renumbers, saves to
+  SpacetimeDB and pre-records the new text in the cloned voice.
+- Never give Droid repo paths, keys or worker names. Never auto-approve.
+

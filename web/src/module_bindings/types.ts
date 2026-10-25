@@ -90,6 +90,30 @@ export const Device = __t.object("Device", {
 });
 export type Device = __Infer<typeof Device>;
 
+export const DroidEvent = __t.object("DroidEvent", {
+  id: __t.u64(),
+  jobId: __t.string(),
+  kind: __t.string(),
+  text: __t.string(),
+  at: __t.timestamp(),
+});
+export type DroidEvent = __Infer<typeof DroidEvent>;
+
+export const DroidJob = __t.object("DroidJob", {
+  id: __t.string(),
+  taskId: __t.string(),
+  stepId: __t.u32(),
+  trigger: __t.string(),
+  reason: __t.string(),
+  status: __t.string(),
+  plan: __t.string(),
+  summary: __t.string(),
+  proposal: __t.string(),
+  createdAt: __t.timestamp(),
+  updatedAt: __t.timestamp(),
+});
+export type DroidJob = __Infer<typeof DroidJob>;
+
 export const HelpEscalationTimer = __t.object("HelpEscalationTimer", {
   scheduledId: __t.u64(),
   scheduledAt: __t.scheduleAt(),

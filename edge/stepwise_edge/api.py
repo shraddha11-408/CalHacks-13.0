@@ -439,6 +439,7 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
         meta = {"kind": "mistake", "task_id": s.task["task_id"], "task": s.task["title"], "step_id": st["id"], "tip": correction}
         text = f"{s.worker_name} had trouble with \"{st['instruction']}\" while doing {s.task['title']}: {result.get('reason') or st['common_mistake']}"
         asyncio.create_task(_safe(memory.add(s.worker_id, text, meta)))
+        note_trouble(s, "correction", result.get("reason") or st["common_mistake"], correction)
     elif status == "unavailable" and trigger in ("voice", "button"):
         # demo never freezes: an explicit "done" moves on when the models can't answer
         out.update(await _advance(s, "system", trigger))
@@ -548,6 +549,7 @@ async def coach_help(sid: str, req: HelpReq) -> dict:
     stdb().call("request_help", s.id, s.worker_id, s.task["task_id"], s.step["id"], photo)
     log_event(s, "help", "button", "button", 1.0, 0, "help requested", photo)
     s.flag("help")
+    note_trouble(s, "help")
     return {"say": [say(PHRASES["help"])], "photo": photo}
 
 
@@ -590,6 +592,7 @@ async def wrist_press(req: WristPress | None = None) -> dict:
     if s:
         log_event(s, "help", "wristband", "wristband", 1.0, 0, "wristband pressed: supervisor called")
         s.flag("help")
+        note_trouble(s, "help")
     return out
 
 
@@ -1124,3 +1127,100 @@ def video_get(video_id: str) -> dict:
     if not p.exists():
         raise HTTPException(404, "not analyzed yet")
     return json.loads(p.read_text())
+
+
+# ---------- Droid re-teach engineer (docs/DROID.md) ----------
+from . import droid as droid_mod  # noqa: E402
+
+droid_jobs = droid_mod.Jobs(ROOT, DATA, store, stdb)
+TROUBLE: dict[tuple[str, int], list[dict]] = {}  # (task_id, step_id) -> recent spoken corrections + help requests
+TROUBLE_WINDOW_S = 3600
+
+
+def _recent_trouble(task_id: str, step_id: int) -> list[dict]:
+    key = (task_id, int(step_id))
+    cut = time.time() - TROUBLE_WINDOW_S
+    TROUBLE[key] = [t for t in TROUBLE.get(key, []) if t["ts"] >= cut]
+    return TROUBLE[key]
+
+
+def note_trouble(s: CoachSession, kind: str, reason: str = "", correction: str = "") -> None:
+    """Record a spoken correction / help request; at 2 in an hour, ask Droid to re-teach the step (auto)."""
+    try:
+        tid, sid = s.task["task_id"], int(s.step["id"])
+        log_ = _recent_trouble(tid, sid)
+        log_.append({"ts": time.time(), "kind": kind, "reason": reason[:300], "correction": correction[:300], "worker": s.worker_name})
+        n = len(log_)
+        if n >= 2 and not droid_jobs.blocked(tid, sid, "auto"):
+            asyncio.create_task(_safe(_droid_start(tid, sid, "auto", f"{n} corrections/help in the last hour", s.worker_id)))
+    except Exception as e:  # never break the coach loop
+        log.warning("droid trouble log: %s", e)
+
+
+async def _droid_start(task_id: str, step_id: int, trigger: str, reason: str, worker_id: str | None = None) -> str | None:
+    task = store.get(task_id)
+    if not task:
+        raise HTTPException(404, "no such task")
+    st = next((x for x in task.get("steps", []) if int(x["id"]) == int(step_id)), None)
+    if not st:
+        raise HTTPException(404, "no such step")
+    trouble = list(_recent_trouble(task_id, step_id))
+    names = {t["worker"] for t in trouble if t.get("worker")}
+    names |= {x.worker_name for x in list(sessions.values()) + list(ended.values()) if x.task["task_id"] == task_id and x.worker_name}
+    wids = {worker_id} if worker_id else {x.worker_id for x in list(sessions.values()) + list(ended.values()) if x.task["task_id"] == task_id}
+    notes: list[str] = []
+    for w in list(wids)[:2]:
+        try:
+            mems, _ = await asyncio.wait_for(memory.recall(w, st["instruction"], top_k=3), 3)
+            notes += [m["text"] for m in mems]
+        except Exception as e:
+            log.info("droid: moss recall failed: %s", e)
+    return droid_jobs.start(task, step_id, trigger, reason, {"trouble": trouble, "notes": notes[:3], "names": sorted(names)})
+
+
+class ReteachReq(BaseModel):
+    task_id: str
+    step_id: int
+    trigger: str = "supervisor"
+    reason: str = ""
+
+
+@router.post("/droid/reteach")
+async def droid_reteach(req: ReteachReq) -> dict:
+    trig = req.trigger if req.trigger in ("supervisor", "auto") else "supervisor"
+    jid = await _droid_start(req.task_id, req.step_id, trig, req.reason.strip() or "Supervisor asked Droid to fix this step")
+    if not jid:
+        raise HTTPException(409, "a Droid job for this step is already active")
+    return {"job_id": jid}
+
+
+@router.get("/droid/jobs")
+def droid_list() -> list[dict]:
+    return droid_jobs.list()
+
+
+@router.post("/droid/jobs/{job_id}/approve")
+async def droid_approve(job_id: str) -> dict:
+    try:
+        task = droid_jobs.approve(job_id)
+    except KeyError:
+        raise HTTPException(404, "no such job")
+    except ValueError as e:
+        raise HTTPException(409, str(e))
+    try:
+        await asyncio.to_thread(voice.ensure_many, droid_mod.Jobs.texts(task["steps"]), task_voice(task))
+        audio_ok = True
+    except Exception as e:
+        log.warning("droid approve: pre-record failed: %s", e)
+        audio_ok = False
+    return {"job": droid_jobs.get(job_id), "task": task, "audio_ok": audio_ok}
+
+
+@router.post("/droid/jobs/{job_id}/reject")
+def droid_reject(job_id: str) -> dict:
+    try:
+        return droid_jobs.reject(job_id)
+    except KeyError:
+        raise HTTPException(404, "no such job")
+    except ValueError as e:
+        raise HTTPException(409, str(e))

@@ -42,6 +42,8 @@ import CallSupervisorReducer from "./call_supervisor_reducer";
 import ClaimHelpReducer from "./claim_help_reducer";
 import CoachEndCallReducer from "./coach_end_call_reducer";
 import DeleteTaskReducer from "./delete_task_reducer";
+import DroidEventLogReducer from "./droid_event_log_reducer";
+import DroidJobSetReducer from "./droid_job_set_reducer";
 import EndSessionReducer from "./end_session_reducer";
 import EnsureSchedulesReducer from "./ensure_schedules_reducer";
 import HeartbeatReducer from "./heartbeat_reducer";
@@ -64,6 +66,8 @@ import AgentCallRow from "./agent_call_table";
 import AgentStatsRow from "./agent_stats_table";
 import ClaimAttemptRow from "./claim_attempt_table";
 import DeviceRow from "./device_table";
+import DroidEventRow from "./droid_event_table";
+import DroidJobRow from "./droid_job_table";
 import HelpRequestRow from "./help_request_table";
 import HelpRouteRow from "./help_route_table";
 import LevelChangeRow from "./level_change_table";
@@ -137,6 +141,31 @@ const tablesSchema = __schema({
       { name: 'device_identity_key', constraint: 'unique', columns: ['identity'] },
     ],
   }, DeviceRow),
+  droidEvent: __table({
+    name: 'droid_event',
+    indexes: [
+      { accessor: 'id', name: 'droid_event_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'jobId', name: 'droid_event_job_id_idx_btree', algorithm: 'btree', columns: [
+        'jobId',
+      ] },
+    ],
+    constraints: [
+      { name: 'droid_event_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, DroidEventRow),
+  droidJob: __table({
+    name: 'droid_job',
+    indexes: [
+      { accessor: 'id', name: 'droid_job_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'droid_job_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, DroidJobRow),
   helpRequest: __table({
     name: 'help_request',
     indexes: [
@@ -323,6 +352,8 @@ const reducersSchema = __reducers(
   __reducerSchema("claim_help", ClaimHelpReducer),
   __reducerSchema("coach_end_call", CoachEndCallReducer),
   __reducerSchema("delete_task", DeleteTaskReducer),
+  __reducerSchema("droid_event_log", DroidEventLogReducer),
+  __reducerSchema("droid_job_set", DroidJobSetReducer),
   __reducerSchema("end_session", EndSessionReducer),
   __reducerSchema("ensure_schedules", EnsureSchedulesReducer),
   __reducerSchema("heartbeat", HeartbeatReducer),
