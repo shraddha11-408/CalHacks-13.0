@@ -1,0 +1,20 @@
+# Starts the camera + microphone stream when the Pi boots, and restarts it if it dies.
+# Install (on the Pi):
+#   sudo cp ~/stepwise_camera/stepwise-camera.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now stepwise-camera
+# Logs: journalctl -u stepwise-camera -f
+[Unit]
+Description=Stepwise camera and microphone stream
+After=network.target sound.target
+
+[Service]
+User=pi
+WorkingDirectory=/home/pi/stepwise_camera
+# 1280x720 (720x1280 after rotate): measured 2026-10-24, 15.0 fps, frame gap p50/p99 70/74 ms, ~52% of one core,
+# ~128 KB per frame. 640x480 left only 336x460 px for the live check after the work-area crop.
+ExecStart=/usr/bin/python3 -u uvc_streamer.py --rotate 270 --width 1280 --height 720
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target

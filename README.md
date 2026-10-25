@@ -41,7 +41,7 @@ The mapping from method to evidence to feature, with 27 sources, is in [docs/IDD
    looks like, the likely mistake, an "Almost." correction, a reason, praise, and a short cue for later. With the
    supervisor's consent, a clip of their narration becomes a Cartesia voice clone. The video is deleted after analysis.
 2. **Coach live.** The worker (Jordan, in our demo) opens their workday, picks *Put sleeves on coffee cups* and
-   presses Start. The camera (laptop webcam standing in for the glasses, or an uploaded video) streams face-blurred
+   presses Start. The camera (the glasses: a Logitech Brio 100 on a Raspberry Pi 5, the laptop webcam, or an uploaded video) streams face-blurred
    frames. For each frame, Claude Sonnet sees the whole step list and says done, mistake or in progress, with a box
    on the mistake and a short fix. The worker hears it in their supervisor's voice.
 3. **Talk.** An always-on mic hears "Is this right?", "Why?", "I'm stuck", "What am I holding?" and answers out loud
@@ -69,14 +69,14 @@ a task · `/buddy` the buddy phone. Light and dark mode.
 ```
  Browser (worker screen)                      Edge app (FastAPI, laptop)                     Cloud
  ───────────────────────                      ──────────────────────────                     ─────
- webcam / uploaded video                       /coach/{sid}/check  ──────────────────────▶  Claude Sonnet 5.5 (live check)
+ glasses cam / webcam / video                  /coach/{sid}/check  ──────────────────────▶  Claude Sonnet 5.5 (live check)
  MediaPipe hands + face blur (in-browser)      debounce, corrections, fading outcome         Claude Opus 5.5 (teach from video)
  a frame every 0.5 s, ≤3 checks in flight ──▶  /coach/{sid}/talk  (STT → intent → answer)    Claude Sonnet 5.5 (spoken answers)
  always-on mic (VAD) ─────────────────────▶    Moss memory (in-process recall)  ◀─────────▶  Moss Cloud (index sync)
  audio queue + captions ◀──────────────────    Cartesia TTS clips in the cloned voice ◀───▶  Cartesia sonic-3.6 / ink-whisper / clone
                                               reducers over HTTP (fire-and-forget) ──────▶  SpacetimeDB module
  Supervisor / buddy pages ◀═══════ live subscriptions (SpacetimeDB TypeScript SDK) ═══════   (local server or Maincloud)
- Uno Q wristband ─ USB serial ─▶ hardware/backend/uno_serial_bridge.py ─▶ /wrist/press ─▶ call_supervisor reducer
+ Uno Q wristband ─ USB serial ─▶ edge app (or the bridge) ─▶ /wrist/press ─▶ hold: call_supervisor · short: notify_supervisor
 ```
 
 | Part | Where | Stack |
@@ -186,7 +186,8 @@ human: it tells the worker "Help is coming" and gets a coworker there.
 - **Measurable usefulness:** the dashboard measures independence directly: share of steps done with no correction,
   hint or help; steps mastered; steps to re-teach; median time for help to arrive.
 - **Path to production:** the laptop stands in for glasses today. Every device sits behind an interface chosen in
-  `config.yaml`, and Raspberry Pi 5 + camera streaming code is in [hardware/camera/](hardware/camera/) and [pi/](pi/).
+  `config.yaml`. The glasses camera already runs: a Raspberry Pi 5 with a Logitech Brio 100 streams over a USB-C link
+  to the edge app ([hardware/camera/](hardware/camera/), [hardware/README.md](hardware/README.md)).
   SpacetimeDB runs locally or on Maincloud.
 - **Responsible design:** see below.
 
@@ -219,7 +220,8 @@ questions mapped to the right step · Cartesia TTS first audio in 723 ms · lapt
 - **Real:** the teach-from-video pipeline, live camera checks, the cloned voice, speech-to-text answers, Moss memory,
   fading, buddy and supervisor help with the claim race, the wristband call and every dashboard number (computed from
   SpacetimeDB rows).
-- **Stand-ins:** the laptop webcam (or an uploaded video) stands in for the glasses camera, the laptop speaker for
+- **Hardware:** the glasses camera is a Logitech Brio 100 on a Raspberry Pi 5 (the laptop webcam or an uploaded video
+  also work). **Stand-ins:** the laptop speaker for
   the earbuds and the laptop mic for the glasses mic. The glasses on the landing page are product renders of our
   concept.
 - **Examples:** the "Less help every week" journey on the landing page is labeled Sample. The three tasks under
@@ -267,7 +269,7 @@ or `--simulate` without hardware. Details are in [wrist/README.md](wrist/README.
 
 **Tests:**
 ```bash
-.venv/bin/python -m pytest              # coach decision rules, debounce, live-check parsing, progress, voice (56 tests)
+.venv/bin/python -m pytest              # coach decision rules, debounce, live-check parsing, progress, voice (80 tests)
 (cd web && npm test)                    # trigger engine
 .venv/bin/python scripts/stdb_module_check.py   # SpacetimeDB rules against a separate test database
 ```
@@ -291,7 +293,7 @@ edge/stepwise_edge/ FastAPI edge app: api.py (HTTP API), live_vision.py, claude.
                     memory.py, stdb.py, coach.py (session + decision rules), video.py (teach from video)
 edge/tests/         pytest suite
 spacetime/          SpacetimeDB module (TypeScript)
-hardware/, wrist/   Uno Q wristband sketch + serial bridge; Pi 5 camera streamer (path to real glasses)
+hardware/, wrist/   Uno Q wristband (edge serial or bridge); Pi 5 + Brio 100 glasses camera streamer
 scripts/            eval, seed and smoke scripts
 eval/results/       measured eval output
 docs/               IDD research, frontend spec, UI guide, archived full vision

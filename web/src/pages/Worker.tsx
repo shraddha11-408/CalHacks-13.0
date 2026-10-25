@@ -13,6 +13,7 @@ import { api, type Progress, type PublicConfig, type StepPayload, type TalkResul
 import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
 import { Listener, type ListenPhase } from '../lib/listen'
 import { grab, snapshot } from '../lib/vision'
+import { useEdgeEvents } from '../edge'
 
 const NAME_KEY = 'stepwise-worker'
 const readName = () => {
@@ -359,8 +360,10 @@ function WorkerTask({ taskId }: { taskId: string }) {
     setPhase('summary')
   }, [taskId])
 
+  const [starting, setStarting] = useState(false)
   const start = async () => {
-    if (!task) return
+    if (!task || starting) return
+    setStarting(true)
     setErr(null)
     setMistakes([])
     setHelpSent(false)
@@ -377,8 +380,30 @@ function WorkerTask({ taskId }: { taskId: string }) {
       audio.current?.say(r.say, 'advance', { force: true })
     } catch (e) {
       setErr(`The camera check could not start: ${(e as Error).message}`)
+    } finally {
+      setStarting(false)
     }
   }
+
+  // The edge keeps sessions in memory, so a restart (e.g. --reload while coding) forgets them.
+  // Start a new session for the same worker and task, quietly, at the step the worker is on.
+  const iRef = useRef(i)
+  iRef.current = i
+  const resuming = useRef(false)
+  const onSessionLost = useCallback(async () => {
+    if (!task || resuming.current) return
+    resuming.current = true
+    try {
+      const r = await api.start(readName() || 'Worker', task.task_id)
+      if (iRef.current > 0) await api.goto(r.session_id, iRef.current)
+      sidRef.current = r.session_id
+      setSid(r.session_id)
+    } catch (e) {
+      setErr(`Lost the coach and could not reconnect: ${(e as Error).message}`)
+    } finally {
+      resuming.current = false
+    }
+  }, [task])
 
   const onLiveStep = useCallback((p: StepPayload) => {
     quietNext.current = true
@@ -500,6 +525,17 @@ function WorkerTask({ taskId }: { taskId: string }) {
     }
   }
 
+  // the wrist node (Uno Q on USB serial, edge/stepwise_edge/wrist.py): hold = the supervisor is called (CALL on the
+  // matrix), short touch = a quiet note to the supervisor. The edge sends both; the page speaks the reply.
+  useEdgeEvents((e) => {
+    if (e.sid !== sidRef.current || phase !== 'running') return
+    if (e.type === 'help_sent') setHelpSent(true)
+    else if (e.type === 'wrist' && (e.action === 'call' || e.action === 'notify')) {
+      if (e.action === 'call') setHelpSent(true)
+      if (Array.isArray(e.say) && e.say.length) playSay(e.say as Say[], 'answer')
+    }
+  })
+
   if (!task) {
     return (
       <AppShell back={{ to: '/worker', label: 'My tasks' }}>
@@ -554,8 +590,8 @@ function WorkerTask({ taskId }: { taskId: string }) {
               </li>
             ))}
           </ol>
-          <button className="btn btn-primary btn-xl btn-block" onClick={start} disabled={!cfg}>
-            {demoVideo ? 'Start task with the video' : 'Start task'}
+          <button className="btn btn-primary btn-xl btn-block" onClick={start} disabled={!cfg || starting} aria-busy={starting}>
+            {starting ? 'Starting…' : demoVideo ? 'Start task with the video' : 'Start task'}
           </button>
           <p className="wk-caption center">
             {demoVideo ? 'The video plays here and is checked like the camera. It stays in this browser.' : 'The camera turns on. Your face is blurred, and no video is saved.'}
@@ -601,7 +637,7 @@ function WorkerTask({ taskId }: { taskId: string }) {
           </div>
           <div className="wk-run-grid">
             <div className="wk-cam stack" style={{ gap: 12 }}>
-              <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} file={demoVideo} />
+              <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} file={demoVideo} onSessionLost={onSessionLost} />
             </div>
             <aside className="wk-guide stack" style={{ gap: 16 }}>
               <div className="row" style={{ gap: 10, flexWrap: 'wrap' }}>
@@ -673,8 +709,8 @@ function WorkerTask({ taskId }: { taskId: string }) {
           </div>
           <MistakeLog task={task} mistakes={mistakes} startedAt={startedAt} />
           <div className="row" style={{ flexWrap: 'wrap' }}>
-            <button className="btn btn-primary btn-xl" onClick={start}>
-              Do it again
+            <button className="btn btn-primary btn-xl" onClick={start} disabled={starting} aria-busy={starting}>
+              {starting ? 'Starting…' : 'Do it again'}
             </button>
             <Link className="btn btn-outline btn-xl" to="/worker">
               My tasks

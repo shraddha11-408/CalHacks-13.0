@@ -9,11 +9,14 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
+from urllib.parse import urljoin
 
 import cv2
+import httpx
 import numpy as np
 from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
 from fastapi.responses import StreamingResponse
@@ -26,10 +29,12 @@ from . import api
 from .camera import make_camera
 from .events import EventBus
 from .pipeline import Pipeline
+from .wrist import HelpRouter, WristNode
 
 CONFIG = load_config()
 bus = EventBus()
-state: dict = {"pipeline": None, "camera_error": None}
+state: dict = {"pipeline": None, "camera_error": None, "wrist": None}
+log = logging.getLogger("stepwise.main")
 
 # Names only. Values are never returned, printed or logged.
 SECRET_KEYS = [
@@ -44,11 +49,29 @@ SECRET_KEYS = [
 ]
 
 
+def _start_wrist(loop: asyncio.AbstractEventLoop) -> WristNode | None:
+    """devices.wrist: uno_q -> the Uno Q wrist node on USB serial (wrist.py). Hold = call the supervisor,
+    short touch = a quiet note; both run api.wrist_press on the event loop. The worker's page hears about it
+    as a "wrist" event on the WebSocket and speaks the reply."""
+    if CONFIG["devices"].get("wrist") != "uno_q":
+        return None
+
+    def press(kind: str, sid: str):
+        return asyncio.run_coroutine_threadsafe(api.wrist_press(api.WristPress(session_id=sid, kind=kind)), loop)
+
+    router = HelpRouter(api.sessions, bus.publish, press)
+    node = WristNode(CONFIG["devices"].get("wrist_port", "auto"), on_hold=router.on_hold, on_touch=router.on_touch)
+    router.node = node
+    api.HELP_SENT_HOOKS.append(router.help_sent)
+    return node.start()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     bus.bind(asyncio.get_running_loop())
     cam = None
     await api.startup()
+    state["wrist"] = _start_wrist(asyncio.get_running_loop())
     # The MVP coach loop runs the camera in the browser (MediaPipe). The edge-side
     # ArUco pipeline is opt-in (devices.edge_camera) so it doesn't hold the webcam.
     if CONFIG["devices"].get("edge_camera") and os.getenv("STEPWISE_NO_CAMERA") != "1":
@@ -58,6 +81,8 @@ async def lifespan(_app: FastAPI):
         except Exception as e:  # camera missing or permission denied: app still serves
             state["camera_error"] = str(e)
     yield
+    if state["wrist"]:
+        state["wrist"].stop()
     if state["pipeline"]:
         state["pipeline"].stop()
     if cam:
@@ -83,6 +108,7 @@ def health() -> dict:
         "ok": True,
         "devices": {k: CONFIG["devices"][k] for k in ("camera", "mic", "speaker", "wrist")},
         "camera": "ok" if p and not p.camera.error else (p.camera.error if p else state["camera_error"] or "browser"),
+        "wrist": state["wrist"].status if state["wrist"] else "off",
         "spacetimedb": api.stdb().public() | {"error": api.stdb().error},
         "voice_error": api.voice.error,
         "memory_error": api.memory.error,
@@ -121,6 +147,43 @@ def _mjpeg(which: str, fps: float = 15):
 def stream_raw():
     """Raw camera view with marker + gate overlays. Local only — contains the room."""
     return StreamingResponse(_mjpeg("raw"), media_type="multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/stream/glasses.mjpg")
+async def stream_glasses():
+    """The glasses camera (Pi 5 + Brio 100, devices.pi_stream_url) passed through as is. The page is
+    https and the Pi is plain http with no CORS, so the browser reads it here, same origin. Local only:
+    the browser blurs faces before any frame leaves it, as with the webcam."""
+    return await _pi_passthrough(CONFIG["devices"]["pi_stream_url"], "camera", "multipart/x-mixed-replace; boundary=frame")
+
+
+@app.get("/stream/glasses.pcm")
+async def stream_glasses_mic():
+    """The glasses mic (Brio 100 on the Pi, served at /audio): 16 kHz mono s16le, passed through as is."""
+    url = urljoin(CONFIG["devices"]["pi_stream_url"], "/audio")
+    return await _pi_passthrough(url, "mic", "audio/L16; rate=16000; channels=1")
+
+
+async def _pi_passthrough(url: str, what: str, default_type: str) -> StreamingResponse:
+    client = httpx.AsyncClient(timeout=httpx.Timeout(5.0, read=10.0))
+    try:
+        resp = await client.send(client.build_request("GET", url), stream=True)
+        resp.raise_for_status()
+    except httpx.HTTPError as e:
+        await client.aclose()
+        raise HTTPException(503, f"Glasses {what} not reachable at {url} ({type(e).__name__}). Is the Pi's USB-C cable in?")
+
+    async def body():
+        try:
+            async for chunk in resp.aiter_raw():
+                yield chunk
+        except httpx.HTTPError:
+            pass  # Pi unplugged mid-stream: end the response, the page reconnects
+        finally:
+            await resp.aclose()
+            await client.aclose()
+
+    return StreamingResponse(body(), media_type=resp.headers.get("content-type", default_type), headers={"Cache-Control": "no-store"})
 
 
 @app.get("/stream/tray.mjpg")

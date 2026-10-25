@@ -57,7 +57,10 @@ export function BuddyPage() {
 
 function BuddyAlerts({ name, error, onChangeName }: { name: string; error: string | null; onChangeName: () => void }) {
   useRegisterDevice('buddy', name)
-  const [help] = useTable(tables.helpRequest)
+  const [helpAll] = useTable(tables.helpRequest)
+  const [routes] = useTable(tables.helpRoute)
+  // a wristband short touch is a quiet note for the supervisor only, never a buddy alert
+  const help = helpAll.filter((h) => routes.find((r) => r.helpId === h.id)?.routedTo !== 'notice')
   const [attempts] = useTable(tables.claimAttempt)
   const [workers] = useTable(tables.worker)
   const [tasks] = useTable(tables.task)

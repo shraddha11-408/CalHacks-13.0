@@ -47,12 +47,18 @@ Cut features, never these. They are enforced in review.
 Browser (React)  ──HTTPS, /api proxy──▶  Edge app (FastAPI, :8000)  ──▶ Claude (Anthropic), Cartesia, Moss
       ▲                                        │ fire-and-forget reducer calls (HTTP)
       └──── live subscriptions (SDK, /v1 proxy) ◀── SpacetimeDB module (local :3000 or Maincloud)
-Uno Q wristband ─USB serial─▶ hardware/backend/uno_serial_bridge.py ─▶ POST /wrist/press
+Glasses (Pi 5 + Brio 100) ─USB-C gadget─▶ edge /stream/glasses.mjpg + .pcm ─▶ browser ("Glasses (Pi)")
+Uno Q wristband ─USB serial─▶ edge app (wrist.py, devices.wrist: uno_q)
+                             or hardware/backend/uno_serial_bridge.py ─▶ POST /wrist/press (devices.wrist: keyboard)
 ```
 
 - **Browser** owns the camera and mic: MediaPipe hands (pause trigger) and face detection (blur), snapshot crop and
-  resize, the always-on mic with voice activity detection, the audio queue and captions. The laptop webcam, or an
-  uploaded video, stands in for the glasses camera.
+  resize, the always-on mic with voice activity detection, the audio queue and captions. The camera is the laptop
+  webcam, the glasses (pick "Glasses (Pi)" in the camera menu), or an uploaded video. The glasses come through the
+  edge app (`/stream/glasses.mjpg`, `/stream/glasses.pcm`: the page is https, the Pi is plain http with no CORS);
+  `web/src/lib/glasses.ts` turns them into MediaStreams, so hand tracking, blur and snapshots work unchanged. Each
+  camera keeps its own work area; the glasses default to the whole frame. The supervisor's teach recorder can use
+  the glasses camera and mic (laptop mic if the glasses mic fails).
 - **Edge app** owns decisions: live check calls, debounce, corrections, fading outcomes, talk intents, Moss memory,
   Cartesia TTS/STT/cloning, and task storage (`data/`, git-ignored).
 - **SpacetimeDB** owns shared state: workers, tasks, sessions, step events and outcomes, mastery (fading), help
@@ -66,11 +72,11 @@ Uno Q wristband ─USB serial─▶ hardware/backend/uno_serial_bridge.py ─▶
 |---|---|
 | `web/src/pages/` | `Home` (landing), `Why` (research), `Choose`, `Worker` (workday + task run), `SupervisorHome` (dashboard, floor, help, add a task), `Buddy` (buddy phone), `Steps`. Lab pages (`/lab`, `/teach`, `/video`, `/coach`, `/health`) are dev tools. |
 | `web/src/components/` | `SiteHeader`/`SiteFooter`/`AppShell`, `Brand` (`BRAND = 'drigil'`), `viz/` (StepTimeline, SupportChip, SupportMeter, CorrectionBubble, StatCard, GlassesMock), `dash/Dashboard`, `LiveCheck`, `CameraStage`, `HeroStory` (landing animation), `GlassesExplorer` (hotspot explorer), `WristButton`, `IncomingCall`, `WorkerFading`, `States` |
-| `web/src/lib/` | `api.ts` (edge API client), `audio.ts` (speech queue), `listen.ts` (always-on mic), `vision.ts` (MediaPipe, blur, snapshots), `triggers.ts`, `media.ts` (secure-context camera/mic), `levels.ts`, `photos.ts`, `glassesHotspots.ts` |
+| `web/src/lib/` | `api.ts` (edge API client), `audio.ts` (speech queue), `listen.ts` (always-on mic), `vision.ts` (MediaPipe, blur, snapshots), `triggers.ts`, `media.ts` (secure-context camera/mic), `glasses.ts` (Pi camera + mic as MediaStreams), `levels.ts`, `photos.ts`, `glassesHotspots.ts` |
 | `web/src/styles/` | `piedra.css` (brand tokens, light + dark), `tokens.css`, `app.css`, `idd.css`, plus one stylesheet per area (`home`, `why`, `worker`, `supervisor`, `dash`, `buddy`, `wrist`, `viz`, `explorer`, `herostory`, `glasses`) |
 | `edge/stepwise_edge/` | `api.py` (all HTTP endpoints), `coach.py` (session state + decision rules, pure), `live_vision.py` (live check), `claude.py` + `prompts.py` (teach, answers, judge, locate), `video.py` (teach from video), `voice.py` (Cartesia + voice registry), `memory.py` (Moss), `stdb.py` (SpacetimeDB HTTP client), `progress.py`, `report.py`, `tasks.py`, `vision.py` (Bitdeer, eval only), `agent.py` (Cartesia agent, unused) |
 | `spacetime/spacetimedb/src/index.ts` | The SpacetimeDB module. Read `spacetime/docs/SPACETIMEDB_AGENT_RULES.md` before editing. |
-| `hardware/`, `wrist/`, `pi/` | Uno Q wristband sketch + serial bridge; Pi 5 camera streamer (path to real glasses) |
+| `hardware/`, `wrist/` | Uno Q wristband sketch + serial bridge; Pi 5 + Brio 100 camera/mic streamer and its boot service (`hardware/camera/`), `hardware/start.sh` (checks the whole chain). Details and measurements: `hardware/README.md`, `hardware/TESTING.md`, `wrist/README.md` |
 | `scripts/` | `seed_example_tasks.py`, `eval_live_fast.py`, `eval_live_prompt.py`, `compare_models.py`, `stdb_module_check.py`, `smoke_mvp.py`, `killtests/` |
 | `docs/` | `IDD_RESEARCH.md` (sourced facts), `FRONTEND_SPEC.md` (page architecture), `UI_GUIDE.md` (brand), archived vision |
 | `config.yaml` | Every tunable: models, coach thresholds, devices, SpacetimeDB target. Secrets only in `.env`. |
@@ -133,8 +139,9 @@ Switching back is one call in `api.run_check`.
   level less support. `DEMOTE_ERRORS` = 2 errors in the last `WINDOW` = 5 → one level more. The supervisor can
   override with `set_support_level`. Levels: 0 full instruction · 1 short cue · 2 alerts only · 3 on their own.
 - **Help:** `request_help` routes to buddies first. The scheduled `escalate_help` moves it to the supervisor after
-  20 s. `claim_help` is atomic, so exactly one claimer wins and losers are logged. `call_supervisor` (wristband)
-  routes straight to the supervisor and records a `wrist_call`. Claim and resolve stamp `answered_at`.
+  20 s. `claim_help` is atomic, so exactly one claimer wins and losers are logged. `call_supervisor` (wristband
+  hold) routes straight to the supervisor and records a `wrist_call` (their screen rings). `notify_supervisor`
+  (wristband short touch) is a quiet note: routed `notice`, no ringing, no buddy alert, no escalation. Claim and resolve stamp `answered_at`.
 - **Scheduled reducers:** `escalate_help`, a presence sweep, and the progress rollup (both every 10 s).
 - **Changing the schema:** make additive changes only and publish without wiping data
   (`spacetime publish stepwise --server local --yes`). Then regenerate the bindings into `web/src/module_bindings/`
@@ -169,6 +176,9 @@ Switching back is one call in `api.run_check`.
 - Keep the hot path non-blocking: model calls run off the event loop with timeouts, and database writes are
   fire-and-forget (`stdb().call`).
 - Every device sits behind an interface chosen in `config.yaml` (`devices.*`).
+- **Glasses camera:** the Pi's boot service streams 1280x720 MJPEG rotated to 720x1280 portrait (measured
+  2026-10-24: 15.0 fps, frame gap p50/p99 70/74 ms, ~52% of one Pi core; 15.2 fps through the edge). Code must not
+  assume landscape. Only one program can open the Uno Q's serial port: the edge app (default) or the bridge.
 - Look up current official docs before writing integration code (Anthropic, Cartesia, SpacetimeDB, Moss). Don't
   guess APIs.
 - Don't commit or push unless a human asks. Don't touch `data/`, `.env` or `web/.cert/`; they are git-ignored on
@@ -186,7 +196,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 (cd web && npm install)
 ./run.sh                                       # SpacetimeDB :3000 + module publish, edge :8000, web https://localhost:5173
 .venv/bin/python scripts/seed_example_tasks.py # example café tasks for the demo worker
-.venv/bin/python -m pytest                     # 56 tests
+.venv/bin/python -m pytest                     # 80 tests
 (cd web && npx tsc -b --noEmit && npm test)
 .venv/bin/python scripts/stdb_module_check.py  # module rules on a separate test database
 ```
@@ -204,7 +214,7 @@ Before handing work back:
 - **Cartesia voice agent:** `agent.py` and the `/coach/{sid}/agent*` endpoints. It was replaced by the always-on mic
   because it could not see the camera.
 - **Gemini and the Haiku/Sonnet split for live checks:** removed for simplicity and better mistake recall.
-- **Pi 5 camera streaming:** written, but the demo uses the laptop webcam or an uploaded video.
+- **Glasses mic for live talk:** the Brio mic reaches the teach recorder only; live STT still uses the laptop mic.
 
 ## 12. Droid: the re-teach engineer
 

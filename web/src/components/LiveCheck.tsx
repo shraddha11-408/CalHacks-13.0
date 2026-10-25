@@ -58,6 +58,9 @@ export function MistakeMark({ mark }: { mark: Mark | null }) {
   )
 }
 
+/** the edge's 404 for a session it doesn't hold (in memory only, so any edge restart drops it) */
+export const SESSION_LOST = 'session ended or unknown'
+
 const PHASE = { no_hands: 'No hands', moving: 'Hands moving', still: 'Hands still', busy: 'Hands' } as const
 
 /**
@@ -76,6 +79,7 @@ export function LiveCheck({
   onMistake,
   videoRef,
   file = null,
+  onSessionLost,
 }: {
   cfg: PublicConfig
   sessionId: string
@@ -88,6 +92,8 @@ export function LiveCheck({
   videoRef?: MutableRefObject<HTMLVideoElement | null>
   /** an uploaded video stands in for the camera */
   file?: File | null
+  /** the edge no longer knows this session (it restarted): the parent starts a new one at the same step */
+  onSessionLost?: () => void
 }) {
   const ring = useRef<FrameRing | null>(null)
   const ownVideo = useRef<HTMLVideoElement | null>(null)
@@ -166,13 +172,17 @@ export function LiveCheck({
           onSay(r.say, 'stuck')
         }
       } catch (e) {
-        setErr(`Check failed: ${(e as Error).message}`)
+        const msg = (e as Error).message
+        if (msg === SESSION_LOST && onSessionLost) {
+          setErr('Reconnecting to the coach…')
+          onSessionLost()
+        } else setErr(`Check failed: ${msg}`)
         backoffUntil.current = performance.now() / 1000 + 1
       } finally {
         inflight.current -= 1
       }
     },
-    [cfg, sessionId, onSay, onStep, onFinished, onMistake, video],
+    [cfg, sessionId, onSay, onStep, onFinished, onMistake, onSessionLost, video],
   )
 
   const onFrame = useCallback(

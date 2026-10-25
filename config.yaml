@@ -4,11 +4,11 @@
 devices:
   # MVP: the browser owns the webcam (MediaPipe). Set true to also run the edge ArUco pipeline.
   edge_camera: false
-  # webcam = laptop webcam (OpenCV). pi_stream = Pi 5 + OV5647 MJPEG stream.
+  # webcam = laptop webcam (OpenCV). pi_stream = Pi 5 + Brio 100 UVC MJPEG stream (hardware/camera/uvc_streamer.py).
   # file = loop an image/video (file_path) for tests and eval clips.
   camera: webcam
   webcam_index: 0
-  pi_stream_url: http://stepwise-pi.local:8080/stream.mjpg
+  pi_stream_url: http://10.12.194.1:8000/stream  # the Pi over its USB-C cable (hardware/TESTING.md)
   file_path: props/aruco_test_mat.png
   frame_size: [640, 480]
   fps: 15
@@ -17,9 +17,11 @@ devices:
   xvf3800_name_match: "XVF3800"
   # laptop = built-in speaker. xvf3800 = mic array audio out (OPEN, AGENTS.md §14).
   speaker: laptop
-  # keyboard = press "h" in the edge console. uno_q = Uno Q wrist node over Wi-Fi.
-  wrist: keyboard
-  uno_q_url: http://stepwise-wrist.local
+  # uno_q = Uno Q wrist node on USB serial (edge/stepwise_edge/wrist.py): hold 1.5 s = call the supervisor (CALL), short touch = a quiet note to the supervisor.
+  # keyboard = no wrist node (use the page's buttons).
+  wrist: uno_q
+  # auto = find the Uno Q by its USB vendor id (works as COM5, /dev/cu.usbmodem..., /dev/ttyACM0). Or name a port.
+  wrist_port: auto
 
 # MVP coach loop (PLAN.md §2). The browser reads these via /public-config.
 coach:

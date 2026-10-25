@@ -1,13 +1,17 @@
 """Wrist node bridge: Arduino Uno Q touch sensor (USB serial) -> edge app.
 
-Protocol (115200 baud, newline-terminated): the Uno sends DOWN / UP; we reply ACK on DOWN and BUZZ
-once the supervisor call is sent. A hold of 1.5 s or more is a help request and calls the supervisor
-(POST /wrist/press); a shorter touch is a talk request (logged only).
+Protocol (115200 baud, newline-terminated): the Uno sends DOWN / UP; we reply ACK on DOWN, BUZZ (CALL)
+once the supervisor call is sent, and NOTE (a check mark) once a short touch's note is sent.
+A hold of 1.5 s or more calls the supervisor (POST /wrist/press, kind=call); a shorter touch sends the
+supervisor a quiet note (kind=notify).
 
   python hardware/backend/uno_serial_bridge.py [--port /dev/cu.usbmodemXXXX] [--worker jordan]
   python hardware/backend/uno_serial_bridge.py --simulate     # no hardware: press Enter to "touch"
 
 Env: WRIST_PORT, WRIST_WORKER, EDGE_URL (default http://127.0.0.1:8000).
+
+Only one program can open the serial port. With devices.wrist: uno_q (the default) the edge app reads the
+Uno Q itself (edge/stepwise_edge/wrist.py); set devices.wrist: keyboard to use this bridge instead.
 """
 from __future__ import annotations
 
@@ -22,8 +26,8 @@ import urllib.request
 HELP_HOLD_S = 1.5
 
 
-def press(edge: str, worker: str) -> dict | None:
-    body = json.dumps({"worker_id": worker} if worker else {}).encode()
+def press(edge: str, worker: str, kind: str = "call") -> dict | None:
+    body = json.dumps({"kind": kind, **({"worker_id": worker} if worker else {})}).encode()
     req = urllib.request.Request(f"{edge}/wrist/press", body, {"content-type": "application/json"})
     try:
         with urllib.request.urlopen(req, timeout=5) as r:
@@ -71,7 +75,10 @@ def run(port: str, edge: str, worker: str) -> None:
             ser.write(b"ACK\n")
         elif line == "UP" and pressed_at is not None:
             if not sent:
-                print("TALK REQUEST")
+                print("NOTE TO SUPERVISOR")
+                res = press(edge, worker, "notify")
+                if res and res.get("ok"):
+                    ser.write(b"NOTE\n")
             pressed_at = None
 
 

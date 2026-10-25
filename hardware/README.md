@@ -1,25 +1,31 @@
 # Hardware
 
-Code for the glasses (Pi 5 camera) and the wrist node (Uno Q). See AGENTS.md §14 for the full hardware list.
+Code for the glasses (Pi 5 camera) and the wrist node (Uno Q). See AGENTS.md §14 for the full hardware list. **Testing from another laptop: see [TESTING.md](TESTING.md).**
 
 The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in USB gadget mode** (Ethernet over its USB-C cable to the laptop; in bring-up it answered at `10.12.194.1`) and the **Uno Q talks USB serial** to the laptop.
 
-- **Wrist node (Uno Q):** a touch sensor plus the built-in LED matrix. The worker asks for help or for a spoken answer. The touch sensor replaced the button; the sketch and bridge are unchanged because both produce the same `DOWN` / `UP` events.
-- **Glasses (Pi 5):** OV5647 camera streamed as MJPEG to the laptop. Microphone (DJI Mic Mini receiver on the Pi) and audio streaming are not built yet.
+- **Wrist node (Uno Q):** a touch sensor plus the built-in LED matrix. The worker asks for help or for a spoken answer. The touch sensor replaced the button. In the app, `edge/stepwise_edge/wrist.py` talks to the Uno over USB serial (see `wrist/README.md`); `backend/uno_serial_bridge.py` is the standalone test tool for the same protocol.
+- **Glasses (Pi 5):** a Logitech Brio 100 USB webcam (replaced the OV5647 CSI camera) streamed as MJPEG to the laptop. The Pi does no audio: voice in and out is the MacBook's mic and speaker (STT is Cartesia's).
 
 ## Files
 
 | Path | What it is |
 |---|---|
 | `uno_q/wrist_node/wrist_node.ino` | Arduino sketch (MCU side): debounces the touch input, reports touches, drives the LED matrix |
-| `backend/uno_serial_bridge.py` | Laptop-side Python script: reads touch events over USB serial, classifies hold length, sends LED commands back |
-| `camera/pi_streamer.py` | Runs on the Pi 5: Picamera2 -> MJPEG over HTTP |
-| `camera/mjpeg_http.py` | Stdlib HTTP server shared by the streamer and the test server (`/stream`, `/snapshot.jpg`, `/health`) |
+| `backend/uno_serial_bridge.py` | Standalone test tool: reads touch events over USB serial, classifies hold length, sends LED commands back. Finds the port itself (`UNO_PORT` overrides). Do not run it while the app is running: only one program can open the port |
+| `camera/uvc_streamer.py` | Runs on the Pi 5: USB webcam -> MJPEG over HTTP (ffmpeg copies the camera's MJPEG, no re-encode) |
+| `rec.sh`, `record.py` | `./rec.sh -s <seconds> -t <countdown>` records the Pi's video and microphone into one MP4 (+ a `.json` label file) on this laptop; needs ffmpeg |
+| `sync_check.py` | Measures how far the picture lags the sound in a clap recording and suggests `--av-offset` |
+| `doctor.py`, `start.sh` | One-command check of the whole chain (see TESTING.md) |
+| `camera/mjpeg_http.py` | Stdlib HTTP server shared by the streamer and the test servers (`/stream`, `/snapshot.jpg`, `/health`, `/audio`) |
+| `camera/audio_capture.py` | Runs on the Pi: captures the Brio's built-in microphone with `arecord` (16 kHz mono s16le, 100 ms chunks), sets the gain, restarts `arecord` if it dies |
+| `camera/audio_receiver.py` | Laptop side: reads `/audio`, prints rate and level (`--save a.wav`, `--meter`); `iter_pcm(url)` yields 100 ms int16 chunks for STT |
 | `camera/receiver.py` | Laptop side: reads the stream, prints fps, frame gap p50/p99, decode time (`--show` for a preview window) |
 | `camera/rectify.py` | `rectify(frame, marker_ids)` -> top-down tray image, or `None` if a marker is missing. Also a CLI for checking a snapshot |
 | `camera/aruco_markers.py` | Generates printable ArUco markers (DICT_4X4_50, ids 0-3) into `camera/markers/` |
 | `camera/test_rectify.py` | Rectify tests on synthetic camera views (tilt, rotation, missing markers, latency) |
-| `camera/fake_server.py`, `camera/test_stream.py` | Pi stand-in and unit tests (no Pi needed) |
+| `camera/fake_server.py`, `camera/test_stream.py`, `camera/test_uvc.py`, `camera/test_audio.py` | Pi stand-in and unit tests (no Pi or webcam needed; ffmpeg's test pattern stands in for the webcam) |
+| `audio/mac_mic.py` | Laptop mic capture and level check (16 kHz mono) |
 
 ## Wiring
 
@@ -34,7 +40,13 @@ The venue bans phone hotspots, so nothing here is wireless: the **Pi 5 runs in U
 | Uno → laptop | `DOWN` | Touch started (debounced, 40 ms) |
 | Uno → laptop | `UP` | Touch ended |
 | Laptop → Uno | `ACK` | Press seen: LED matrix lights solid for 200 ms |
-| Laptop → Uno | `BUZZ` | Help sent: LED matrix blinks (150 ms) for 1 s |
+| Laptop → Uno | `BUZZ` | Help sent: the matrix shows **CALL** for 2 s, alternating `CA` and `LL` every 400 ms (two 5x7 letters fit per frame) |
+| Laptop → Uno | `NOTE` | Short touch's note sent to the supervisor: a **check mark** for 1.5 s |
+| Laptop → Uno | `TEST` | Draws a 1-pixel border around the whole matrix for 3 s, to check alignment |
+
+While `CALL` is showing (2 s), the Uno ignores every command from the laptop (`ACK`, `TEST`, a second `BUZZ`); they are dropped, not queued. Touch events (`DOWN` / `UP`) are still sent.
+
+The Uno Q matrix is **13 columns x 8 rows** (not the Uno R4's 12x8). `loadFrame` takes `uint32_t[4]`: 104 pixels packed row-major, first pixel in the most significant bit of word 0. Frames are generated by `uno_q/matrix_frames.py` (`python3 -m unittest matrix_frames` checks the packing); do not hand-edit the hex. Checking on the real matrix: after flashing, send `TEST` (for example `python3 -c "import serial;serial.Serial('<port>',115200).write(b'TEST\\n')"`) and look for a complete border with no skew.
 
 Commands are limited to 32 characters. Unknown commands are ignored.
 
@@ -42,8 +54,8 @@ Commands are limited to 32 characters. Unknown commands are ignored.
 
 1. `DOWN` → record the time and reply `ACK` right away, so the worker sees the touch registered.
 2. `UP` → measure the hold time.
-   - **>= 1.5 s** → `HELP ALERT`, reply `BUZZ`. This is the "I'm stuck" request.
-   - **< 1.5 s** → `TALK REQUEST` (a short touch, for a spoken question or "what now?").
+   - **>= 1.5 s** (long touch) → `HELP ALERT`, reply `BUZZ`: the matrix shows **CALL**. This is the "I'm stuck" request.
+   - **< 1.5 s** (short touch) → `NOTE TO SUPERVISOR` (a quiet note in the supervisor's help list; nothing rings). Once it is sent, reply `NOTE`: the matrix shows a check mark for 1.5 s.
 
 Right now both outcomes only print to the console. The next step is to forward them to the edge app (help → `request_help` reducer in SpacetimeDB, which pages the buddy first and the supervisor after 20 s).
 
@@ -51,32 +63,67 @@ Right now both outcomes only print to the console. The next step is to forward t
 
 ```bash
 # 1. Flash wrist_node.ino to the Uno Q (Arduino IDE or arduino-cli)
-# 2. Find the serial port
-ls /dev/cu.usbmodem*
-# 3. Set PORT in backend/uno_serial_bridge.py, then:
+# 2. Run the bridge (it finds the port itself; UNO_PORT=COM5 forces one)
 pip install pyserial
 python hardware/backend/uno_serial_bridge.py
 ```
 
 ## Camera stream (Pi 5 -> laptop)
 
-Camera: OV5647, captured with Picamera2 (`cv2.VideoCapture(0)` will not see it). Default 640x480 at 15 fps.
+Camera: Logitech Brio 100 (UVC), `/dev/video0`, MJPEG up to 1920x1080. The boot service runs 1280x720 at 15 fps (`uvc_streamer.py` alone defaults to 640x480).
 
 ```bash
-# On the Pi (copy hardware/camera/{pi_streamer,mjpeg_http}.py over)
-python3 pi_streamer.py                 # --width --height --fps --port
+# On the Pi (copy hardware/camera/{uvc_streamer,mjpeg_http}.py over)
+v4l2-ctl --list-devices                     # find the webcam's /dev/video* node
+v4l2-ctl -d /dev/video0 --list-formats-ext  # confirm MJPEG at 1280x720
+python3 uvc_streamer.py                     # --device --width --height --fps --port
+python3 uvc_streamer.py --reencode          # only if the webcam has no MJPEG at that size
+python3 uvc_streamer.py --rotate 270        # rotate clockwise 90/180/270 (decodes + re-encodes on the Pi)
 
 # On the laptop (opencv-python-headless + numpy)
 cd hardware/camera && python3 -m venv .venv
 .venv/bin/pip install opencv-python-headless numpy
 .venv/bin/python receiver.py http://<pi-ip>:8000/stream --duration 10
 .venv/bin/python receiver.py http://<pi-ip>:8000/stream --show      # preview, q to quit
-.venv/bin/python -m unittest test_stream -v                         # no Pi needed
+.venv/bin/python -m unittest discover                               # no Pi or webcam needed
 ```
+
+The webcam sits rotated on the glasses mount, so the live stream runs with `--rotate 270` and the frames are **720x1280 (portrait)** at the service's 1280x720. Rotation costs a decode and re-encode: at 1280x720 the streamer used about 52% of one core and held 15.0 fps (frame gap p50/p99 70/74 ms, ~128 KB per frame; 640x480 was 22%, 1920x1080 was 106%, all 15.0 fps; measured 2026-10-24, 10 s each). Measured on the Pi with the Brio 100, unrotated (two 20 s runs): **15.0 fps, frame gap p50/p99 70/72 ms**, about 25-55 KB per frame. The harmless ffmpeg line `unable to decode APP fields` at start-up can be ignored.
 
 The server keeps only the newest frame, so a slow client skips frames instead of building up lag. Any number of clients can connect. `/snapshot.jpg` returns one JPEG; `/health` returns `ok` once frames are flowing.
 
+## Microphone (Brio 100 built-in, streamed from the Pi)
+
+`uvc_streamer.py` also serves the webcam's microphone at `GET /audio`: raw signed 16-bit little-endian PCM, 16 kHz, mono (`Content-Type: audio/L16; rate=16000; channels=1`). Each client gets every chunk; a client that falls behind loses its oldest chunks instead of stalling others. `--no-audio` turns it off.
+
+```bash
+.venv/bin/python audio_receiver.py http://<pi-ip>:8000/audio --seconds 10 --save a.wav   # rate + level
+.venv/bin/python audio_receiver.py http://<pi-ip>:8000/audio --meter                     # live bars
+```
+
+- **Gain:** the device default (Mic Capture Volume 6144, +30 dB) clips speech (peak 0 dBFS). The streamer sets **3072 (about +18 dB)** at start (`--gain`). The setting resets when the USB device is re-plugged or the Pi reboots, so start the streamer after that.
+- **Measured** with the Brio on the Pi, speaking close to the camera, video streaming at the same time: **1.00x realtime**, peak -7.4 dBFS, loudest 100 ms -17.8 dBFS, background about -36 dBFS, no clipping. Video stayed at 15.0 fps.
+- Audio arrives in about 125 ms bursts (the ALSA period), not smooth 100 ms chunks. Latency from the mic to the laptop was not measured.
+- Not tested: speech recognition on this stream (STT is Cartesia's code, not wired to `/audio` yet), and the noise level in a busy hall.
+
+## Recording video with sound (laptop)
+
+```bash
+./rec.sh -s 10                    # record 10 seconds into recordings/<time>.mp4
+./rec.sh -s 10 -t 5               # count down 5 seconds first (-t), then record 10 (-s)
+./rec.sh                          # until Ctrl-C
+./rec.sh -s 20 -t 3 --label correct --step s1
+.venv/bin/python sync_check.py recordings/<clip>.mp4        # after clapping 3 times in view: picture-vs-sound offset
+```
+
+One MP4 (H.264 + AAC), 480x640 portrait at about 15 fps, with a `.json` next to it holding the label and settings (for the eval clips). `recordings/` is git-ignored.
+
+- **Sync:** the picture arrives later than the sound. `record.py` delays the audio by `--av-offset` (default **0.28 s**) to compensate. Measured with claps on 2026-10-24: 0.22-0.24 s late with no correction, 0.10-0.12 s late with 0.23 s. The lag moves by about 0.1 s between runs, so expect up to about 0.06 s of error. Re-measure with `sync_check.py` and pass `--av-offset` if it matters.
+- Only the video input uses wall-clock timestamps. Without them ffmpeg assumes 25 fps and the clip plays too fast; with them on the audio input too, the audio was dropped.
+
 ## ArUco markers and rectify
+
+**Stretch goal.** The default coach loop checks raw camera frames with no markers (AGENTS.md §6). This code is ready for when the markers are printed. With markers off, nothing is cropped or blurred, so frames can include the room and people.
 
 Print `camera/markers/tray_markers_a4.png` at **100% scale** (no "fit to page") and check one marker edge with a ruler: it should be 7 cm. Regenerate at another size with `python3 aruco_markers.py --size-cm 6`. Stick them on the tray corners: **0 top-left, 1 top-right, 2 bottom-right, 3 bottom-left**, flat, with their white border left intact.
 
@@ -93,9 +140,11 @@ Print `camera/markers/tray_markers_a4.png` at **100% scale** (no "fit to page") 
 
 - Rectify is tested on synthetic views only. Run `rectify.py` against a live snapshot with the printed markers on the tray before relying on it.
 - `PORT` is hardcoded to one machine. Make it an env var or CLI argument before sharing.
-- The LED matrix shows a solid fill or blank. Distinct patterns for *help sent*, *help claimed* and *step done* (§14) are not built yet.
-- No reconnect handling if the USB cable is unplugged.
-- No tests for the wrist-node debounce and hold-length logic (AGENTS.md §26). The camera server has tests in `camera/test_stream.py`.
-- Uno Q serial is confirmed working (reported by the hardware owner, not measured here). Still worth checking: the touch sensor is momentary, and a 1.5 s hold gives `HELP ALERT`.
-- Not built yet: DJI Mic Mini capture on the Pi and streaming that audio to the laptop; playing Cartesia TTS on the MacBook speaker; barge-in without echo cancellation (AGENTS.md §14).
+- The matrix has `ACK` (one flash), `NOTE` (check mark: note sent) and `CALL` (supervisor called). Patterns for *help claimed* and *step done* (§14) are not built yet.
+- The bridge script has no reconnect. The app's `wrist.py` reconnects by itself (verified: unplugged, re-plugged 90 s later, touches came back with no restart).
+- Hold length and help routing are tested in the app (`edge/tests/test_wrist.py`, 20 tests); the bridge script itself has no tests. The camera server has tests in `camera/test_stream.py`.
+- Measured on the real Uno Q (2026-10-24): 17 quick taps were HIGH for 0.09-1.14 s and two 1 s presses for 1.06 and 1.23 s, all read as short; four 2-3 s holds were 2.20-2.77 s, all read as help, and `CALL` showed correctly on the 13x8 matrix. Early on, three quick taps read as 2.8-6.7 s (the sensor stayed HIGH); this did not happen again and the cause is unknown, so re-check with the sensor worn on the wrist.
+- Brio 100 low-light behavior and focus at 40-60 cm on the real tray are not tested; check once the camera is on the glasses mount.
+- The stream starts by itself at boot (systemd `stepwise-camera`, see TESTING.md).
+- Voice in and out run on the MacBook (mic and speaker), so TTS leaks into the mic. Input must be ignored while TTS plays (AGENTS.md §14).
 - What a touch should do beyond help/talk is still undecided.

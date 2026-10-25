@@ -13,6 +13,7 @@ import base64
 import json
 import logging
 import time
+from typing import Literal
 
 from fastapi import APIRouter, File, Form, HTTPException, Query, UploadFile
 from fastapi.responses import FileResponse
@@ -48,6 +49,8 @@ def task_voice(task: dict) -> str | None:
     return voices.resolve((task.get("voice") or {}).get("id"))
 sessions: dict[str, CoachSession] = {}
 ended: dict[str, CoachSession] = {}  # recently ended, for the spoken progress summary
+# Called with the session id whenever a help request goes out (button, voice or wrist); main.py adds the wrist node's.
+HELP_SENT_HOOKS: list = []
 _stdb: Stdb | None = None
 
 
@@ -237,13 +240,17 @@ async def _levels(s: CoachSession) -> dict[int, int] | None:
         return None
 
 
+MEMORY_WAIT_S = 1.5
+
+
 async def step_payload(s: CoachSession) -> dict:
     st = s.step
     fresh = await _levels(s)  # a coach's override takes effect from the next step
     if fresh is not None:
         s.levels = fresh
     lvl = s.level_of()
-    mems, ms = await memory.recall(s.worker_id, f"{st['instruction']}. {st['common_mistake']}")
+    # a worker's first start loads their Moss index from the cloud: don't let it hold up the step
+    mems, ms = await memory.recall(s.worker_id, f"{st['instruction']}. {st['common_mistake']}", wait_s=MEMORY_WAIT_S)
     speak = []
     if lvl <= 1:  # levels 2–3 (alerts only, independent): no instruction; the screen still shows it
         tip = next((m for m in mems if m.get("kind") == "mistake" and m.get("tip")), None)
@@ -549,24 +556,34 @@ async def coach_help(sid: str, req: HelpReq) -> dict:
     stdb().call("request_help", s.id, s.worker_id, s.task["task_id"], s.step["id"], photo)
     log_event(s, "help", "button", "button", 1.0, 0, "help requested", photo)
     s.flag("help")
-    note_trouble(s, "help")
+    for hook in HELP_SENT_HOOKS:
+        try:
+            hook(s.id)
+        except Exception:
+            log.exception("help hook failed")
+    note_trouble(s, "help")  # Droid re-teach trigger (docs/DROID.md)
     return {"say": [say(PHRASES["help"])], "photo": photo}
 
 
-# ---------- wristband: one press calls the supervisor ----------
-WRIST_SAY = "Okay. I'm calling your supervisor now."
-WRIST: dict = {"last_press": 0.0, "presses": 0, "last": None}
+# ---------- wristband: hold = call the supervisor (CALL), short touch = a quiet note ----------
+WRIST_SAY = {"call": "Okay. I'm calling your supervisor now.", "notify": "Okay. I told your supervisor."}
+WRIST_REDUCER = {"call": "call_supervisor", "notify": "notify_supervisor"}
+WRIST_LOG = {"call": "wristband held: supervisor called", "notify": "wristband touched: supervisor notified"}
+WRIST: dict = {"last_press": {"call": 0.0, "notify": 0.0}, "presses": 0, "last": None}
 
 
 class WristPress(BaseModel):
     worker_id: str | None = None
     session_id: str | None = None
+    kind: Literal["call", "notify"] = "call"
 
 
 @router.post("/wrist/press")
 async def wrist_press(req: WristPress | None = None) -> dict:
-    """The wristband (or its on-screen stand-in) was pressed: ring the supervisor now, no buddy stage.
-    Finds the worker's active session (or the most recent one); with none, still calls with what we know."""
+    """The wristband (or its on-screen stand-in) was pressed. kind=call (hold): ring the supervisor now, no buddy
+    stage. kind=notify (short touch): a quiet note in the supervisor's help list, no ringing. Both carry the newest
+    face-blurred live frame as the photo. Finds the worker's active session (or the most recent one); with none,
+    still sends what we know."""
     req = req or WristPress()
     s = sessions.get(req.session_id or "")
     if not s and req.worker_id:
@@ -580,19 +597,27 @@ async def wrist_press(req: WristPress | None = None) -> dict:
         return {"ok": False, "say": [], "error": "no worker: send worker_id or session_id"}
     CURRENT_VOICE.set(task_voice(s.task) if s else voices.default_id())
     now = time.monotonic()
-    again = now - WRIST["last_press"] < 5  # a double tap must not ring twice
-    WRIST["last_press"] = now
-    out = {"ok": True, "say": [say(WRIST_SAY)], "worker_id": worker, "session_id": s.id if s else "", "duplicate": again}
+    again = now - WRIST["last_press"][req.kind] < 5  # a double tap must not send twice
+    WRIST["last_press"][req.kind] = now
+    out = {"ok": True, "kind": req.kind, "say": [say(WRIST_SAY[req.kind])], "worker_id": worker, "session_id": s.id if s else "", "duplicate": again}
     if again:
         return out
     WRIST["presses"] += 1
-    WRIST["last"] = {"worker_id": worker, "ts": time.time()}
+    WRIST["last"] = {"worker_id": worker, "kind": req.kind, "ts": time.time()}
     sid, tid, step = (s.id, s.task["task_id"], int(s.step["id"])) if s else (req.session_id or "", "", 0)
-    stdb().call("call_supervisor", sid, worker, tid, step, "")
+    photo = save_photo("wrist", s.id, s.snapshots[-1]) if s and s.snapshots else ""
+    stdb().call(WRIST_REDUCER[req.kind], sid, worker, tid, step, photo)
+    out["photo"] = photo
     if s:
-        log_event(s, "help", "wristband", "wristband", 1.0, 0, "wristband pressed: supervisor called")
-        s.flag("help")
-        note_trouble(s, "help")
+        log_event(s, "help", "wristband", "wristband", 1.0, 0, WRIST_LOG[req.kind], photo)
+        if req.kind == "call":
+            s.flag("help")
+            for hook in HELP_SENT_HOOKS:  # the wrist node shows CALL, whichever way the call came in
+                try:
+                    hook(s.id)
+                except Exception:
+                    log.exception("help hook failed")
+            note_trouble(s, "help")  # Droid re-teach trigger (docs/DROID.md); a quiet note is not trouble
     return out
 
 

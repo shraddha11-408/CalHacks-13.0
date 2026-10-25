@@ -46,7 +46,8 @@ if [ ! -f "$CERT_DIR/key.pem" ] || [ ! -f "$CERT_DIR/cert.pem" ]; then
     || echo "web: openssl failed, serving plain http" >&2
 fi
 
-(cd "$ROOT/edge" && exec "$ROOT/.venv/bin/uvicorn" stepwise_edge.main:app --host 127.0.0.1 --port 8000 --reload) &
+# --timeout-graceful-shutdown: an open glasses camera/mic stream would otherwise hold --reload forever
+(cd "$ROOT/edge" && exec "$ROOT/.venv/bin/uvicorn" stepwise_edge.main:app --host 127.0.0.1 --port 8000 --reload --timeout-graceful-shutdown 2) &
 pids+=($!)
 # WEB_HOST=0.0.0.0 ./run.sh  → buddy phones on the same network can open https://<laptop-ip>:5173/buddy
 # (the web server also proxies SpacetimeDB and the edge API, so phones need only this one address)

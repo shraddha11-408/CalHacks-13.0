@@ -10,6 +10,7 @@ import { fmtLatency } from '../format'
 import { api, type Step, type Task, type VideoJob } from '../lib/api'
 import { apiUrl } from '../lib/audio'
 import { getMedia } from '../lib/media'
+import { openGlasses, openGlassesMic, type GlassesStream } from '../lib/glasses'
 import { reducers, tables } from '../module_bindings'
 import { STAGES } from '../lib/stages'
 import { levelOf } from '../lib/levels'
@@ -261,6 +262,7 @@ function HelpTab({ showTest }: { showTest: boolean }) {
   const [workers] = useTable(tables.worker)
   const [attempts] = useTable(tables.claimAttempt)
   const [routes] = useTable(tables.helpRoute)
+  const [wristCalls] = useTable(tables.wristCall)
   const claim = useReducer(reducers.claimHelp)
   const resolve = useReducer(reducers.resolveHelp)
   const { title, stepText } = useStepLookup()
@@ -278,13 +280,14 @@ function HelpTab({ showTest }: { showTest: boolean }) {
       {open.length === 0 && <EmptyState title="No one needs help right now" text="Help requests from workers appear here the moment they are sent." />}
       {open.map((h) => {
         const route = routes.find((r) => r.helpId === h.id)?.routedTo
+        const notice = route === 'notice' // wristband short touch: a quiet note, nothing rang
         const isOpen = h.status === 'open'
         return (
           <article key={String(h.id)} className={`card sv-alert ${isOpen ? 'sv-alert-open' : ''}`}>
             {h.photo ? <img src={apiUrl(h.photo)} alt={`What ${name(h.workerId)} sees`} /> : <div className="alert-nophoto" aria-hidden />}
             <div className="stack" style={{ gap: 8, flex: 1, minWidth: 0 }}>
               <div className="spread">
-                <strong className="sv-alert-title">{name(h.workerId)} {isOpen ? 'needs a hand' : 'has help coming'}</strong>
+                <strong className="sv-alert-title">{name(h.workerId)} {notice && isOpen ? 'sent you a note' : isOpen ? 'needs a hand' : 'has help coming'}</strong>
                 <span className="sv-wait num" aria-label="Waiting time">{isOpen ? `Waiting ${clock(h.createdAt.toDate())}` : `${h.claimedBy} is going`}</span>
               </div>
               <span className="sv-where">
@@ -292,7 +295,11 @@ function HelpTab({ showTest }: { showTest: boolean }) {
               </span>
               {isOpen && (
                 <span className="small">
-                  {route === 'supervisor' ? (
+                  {notice ? (
+                    <span className="muted">A short touch on the wristband. Not urgent: look when you can.</span>
+                  ) : wristCalls.some((w) => w.helpId === h.id) ? (
+                    <strong>Called from the wristband (held down).</strong>
+                  ) : route === 'supervisor' ? (
                     <strong>No buddy answered in <span className="num">20 s</span>, so it came to you.</strong>
                   ) : (
                     <span className="muted">Sent to help buddies first. It comes to you if nobody answers in <span className="num">20 s</span>.</span>
@@ -452,6 +459,16 @@ function AddTaskTab() {
           })}
         </ol>
       )}
+      {tasks?.length === 0 && (
+        <section className="card stack" style={{ gap: 6 }} role="status">
+          <strong>No task found in this video.</strong>
+          <span>
+            Show the whole task with your hands on the table, and say each step out loud as you do it. A video of a minute or so works
+            best.
+          </span>
+          {job?.result?.transcript_clean && <span className="small muted">What we heard: “{job.result.transcript_clean}”</span>}
+        </section>
+      )}
       {tasks?.map((t) => (
         <section key={t.task_id} className="sv-made stack" style={{ gap: 12 }}>
           <div className="spread">
@@ -480,10 +497,22 @@ function AddTaskTab() {
   )
 }
 
-/** Record a demo with the webcam + mic, preview it, then send it for steps. */
+const REC_CAM_KEY = 'stepwise-rec-camera'
+
+/** Record a demo with the laptop camera + mic, or the glasses camera + mic, preview it, then send it for steps. */
 function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: boolean }) {
   const live = useRef<HTMLVideoElement | null>(null)
   const stream = useRef<MediaStream | null>(null)
+  const glasses = useRef<GlassesStream | null>(null)
+  const glassesMic = useRef<GlassesStream | null>(null)
+  const [note, setNote] = useState<string | null>(null)
+  const [source, setSource] = useState<'laptop' | 'glasses'>(() => {
+    try {
+      return localStorage.getItem(REC_CAM_KEY) === 'glasses' ? 'glasses' : 'laptop'
+    } catch {
+      return 'laptop'
+    }
+  })
   const rec = useRef<MediaRecorder | null>(null)
   const chunks = useRef<Blob[]>([])
   const [state, setState] = useState<'idle' | 'preview' | 'recording' | 'review'>('idle')
@@ -492,6 +521,10 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
   const [err, setErr] = useState<string | null>(null)
 
   const stopStream = () => {
+    glasses.current?.stop()
+    glasses.current = null
+    glassesMic.current?.stop()
+    glassesMic.current = null
     stream.current?.getTracks().forEach((t) => t.stop())
     stream.current = null
   }
@@ -505,14 +538,36 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
 
   const open = async () => {
     setErr(null)
+    setNote(null)
     try {
-      stream.current = await getMedia({ video: { width: 1280, height: 720 }, audio: true })
+      if (source === 'glasses') {
+        // glasses picture + the glasses mic (Brio 100 on the Pi), near the wearer's mouth
+        const [cam, mic] = await Promise.allSettled([openGlasses(), openGlassesMic()])
+        if (cam.status === 'rejected') {
+          if (mic.status === 'fulfilled') mic.value.stop()
+          throw cam.reason
+        }
+        glasses.current = cam.value
+        let audio: MediaStreamTrack[]
+        if (mic.status === 'fulfilled') {
+          glassesMic.current = mic.value
+          audio = mic.value.stream.getAudioTracks()
+        } else {
+          // the picture works but the glasses mic doesn't: record anyway, with the laptop mic, and say so
+          audio = (await getMedia({ audio: true })).getAudioTracks()
+          setNote(`${(mic.reason as Error).message} Recording with the laptop mic instead.`)
+        }
+        stream.current = new MediaStream([...cam.value.stream.getVideoTracks(), ...audio])
+      } else {
+        stream.current = await getMedia({ video: { width: 1280, height: 720 }, audio: true })
+      }
       setState('preview')
       requestAnimationFrame(() => {
         if (live.current) live.current.srcObject = stream.current
       })
     } catch (e) {
-      setErr(`Camera or microphone blocked: ${(e as Error).message}`)
+      const m = (e as Error).message
+      setErr(m.startsWith('Glasses camera') ? `${m} Or record with the laptop camera.` : `Camera or microphone blocked: ${m}`)
     }
   }
   const record = () => {
@@ -541,9 +596,31 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
       {state === 'review' && clip && <video className="rec-video" src={clip.url} controls playsInline />}
       <div className="row">
         {state === 'idle' && (
-          <button className="btn btn-primary" onClick={open} disabled={disabled}>
-            Turn on camera
-          </button>
+          <>
+            <button className="btn btn-primary" onClick={open} disabled={disabled}>
+              Turn on camera
+            </button>
+            <label className="row small" style={{ gap: 6 }}>
+              Camera
+              <select
+                className="search"
+                style={{ width: 'auto', minHeight: 40, padding: '4px 8px' }}
+                value={source}
+                onChange={(e) => {
+                  const v = e.target.value === 'glasses' ? 'glasses' : 'laptop'
+                  setSource(v)
+                  try {
+                    localStorage.setItem(REC_CAM_KEY, v)
+                  } catch {
+                    /* ok */
+                  }
+                }}
+              >
+                <option value="laptop">Laptop camera</option>
+                <option value="glasses">Glasses (Pi)</option>
+              </select>
+            </label>
+          </>
         )}
         {state === 'preview' && (
           <button className="btn btn-urgent" onClick={record}>
@@ -577,6 +654,7 @@ function Recorder({ onDone, disabled }: { onDone: (f: File) => void; disabled: b
         )}
       </div>
       {err && <p className="note-almost">{err}</p>}
+      {note && <p className="small muted">{note}</p>}
       <p className="small muted">Faces are blurred in the photos that are kept. The video is deleted after the steps are made.</p>
     </div>
   )

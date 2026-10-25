@@ -1,7 +1,7 @@
 """Camera sources behind one interface, chosen by devices.camera in config.yaml.
 
 webcam     → LaptopWebcam (AVFoundation on macOS). The only device until the glasses exist.
-pi_stream  → PiStream: MJPEG over HTTP from the Pi 5 + OV5647 (Hardware prompt; untested).
+pi_stream  → PiStream: MJPEG over HTTP from the Pi 5 + Brio 100 UVC webcam (hardware/camera/uvc_streamer.py).
 file       → FileSource: loops an image or video (tests, eval clips). Env STEPWISE_CAMERA=file:<path>
              overrides config for a one-off run.
 
@@ -109,7 +109,7 @@ class LaptopWebcam(CameraSource):
 
 
 class PiStream(CameraSource):
-    """Pi 5 + OV5647 MJPEG stream (pi/ streamer). Wired in the Hardware prompt."""
+    """Pi 5 + Brio 100 UVC MJPEG stream (hardware/camera/uvc_streamer.py). Wired in the Hardware prompt."""
 
     name = "pi_stream"
 

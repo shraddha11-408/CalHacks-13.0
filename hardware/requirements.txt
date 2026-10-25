@@ -1,0 +1,4 @@
+# Laptop side of the hardware code. The Pi needs no pip packages (ffmpeg and arecord from apt).
+opencv-python-headless
+numpy
+pyserial
