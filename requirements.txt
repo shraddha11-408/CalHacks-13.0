@@ -16,3 +16,4 @@ moss==1.21.0
 pytest==9.1.1
 pillow==13.0.0
 python-multipart==0.0.32
+pyserial==3.5  # wrist node (Uno Q) on USB serial

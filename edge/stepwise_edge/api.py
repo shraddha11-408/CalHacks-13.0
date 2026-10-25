@@ -48,6 +48,8 @@ def task_voice(task: dict) -> str | None:
     return voices.resolve((task.get("voice") or {}).get("id"))
 sessions: dict[str, CoachSession] = {}
 ended: dict[str, CoachSession] = {}  # recently ended, for the spoken progress summary
+# Called with the session id whenever a help request goes out (button, voice or wrist); main.py adds the wrist node's.
+HELP_SENT_HOOKS: list = []
 _stdb: Stdb | None = None
 
 
@@ -548,6 +550,11 @@ async def coach_help(sid: str, req: HelpReq) -> dict:
     stdb().call("request_help", s.id, s.worker_id, s.task["task_id"], s.step["id"], photo)
     log_event(s, "help", "button", "button", 1.0, 0, "help requested", photo)
     s.flag("help")
+    for hook in HELP_SENT_HOOKS:
+        try:
+            hook(s.id)
+        except Exception:
+            log.exception("help hook failed")
     return {"say": [say(PHRASES["help"])], "photo": photo}
 
 

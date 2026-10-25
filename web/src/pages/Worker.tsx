@@ -10,6 +10,7 @@ import { api, type Progress, type PublicConfig, type StepPayload, type TalkResul
 import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
 import { Listener, type ListenPhase } from '../lib/listen'
 import { grab, snapshot } from '../lib/vision'
+import { useEdgeEvents } from '../edge'
 
 const NAME_KEY = 'stepwise-worker'
 const readName = () => {
@@ -334,6 +335,16 @@ function WorkerTask({ taskId }: { taskId: string }) {
       setErr(`Help could not be sent: ${(e as Error).message}`)
     }
   }
+
+  // the wrist node (Uno Q on USB serial, edge/stepwise_edge/wrist.py): hold = help, short touch = hear the step
+  useEdgeEvents((e) => {
+    if (e.sid !== sidRef.current || phase !== 'running') return
+    if (e.type === 'help_sent') setHelpSent(true)
+    else if (e.type === 'wrist' && e.action === 'help') {
+      if (helpSent || e.already) say('Help is coming.')
+      else void help()
+    } else if (e.type === 'wrist' && e.action === 'what_now' && step) say(step.instruction)
+  })
 
   if (!task) {
     return (

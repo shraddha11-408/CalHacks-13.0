@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import time
 from contextlib import asynccontextmanager
@@ -26,10 +27,12 @@ from . import api
 from .camera import make_camera
 from .events import EventBus
 from .pipeline import Pipeline
+from .wrist import HelpRouter, WristNode
 
 CONFIG = load_config()
 bus = EventBus()
-state: dict = {"pipeline": None, "camera_error": None}
+state: dict = {"pipeline": None, "camera_error": None, "wrist": None}
+log = logging.getLogger("stepwise.main")
 
 # Names only. Values are never returned, printed or logged.
 SECRET_KEYS = [
@@ -44,11 +47,30 @@ SECRET_KEYS = [
 ]
 
 
+def _start_wrist(loop: asyncio.AbstractEventLoop) -> WristNode | None:
+    """devices.wrist: uno_q -> the Uno Q wrist node on USB serial (wrist.py). Touches reach the worker's
+    page as "wrist" events on the WebSocket; the page sends the help request with a photo."""
+    if CONFIG["devices"].get("wrist") != "uno_q":
+        return None
+
+    def send_help(sid: str) -> None:
+        # No page answered the wrist event: run the normal help route on the event loop.
+        fut = asyncio.run_coroutine_threadsafe(api.coach_help(sid, api.HelpReq()), loop)
+        fut.add_done_callback(lambda f: f.exception() and log.warning("wrist help failed: %s", f.exception()))
+
+    router = HelpRouter(api.sessions, bus.publish, send_help)
+    node = WristNode(CONFIG["devices"].get("wrist_port", "auto"), on_help=router.on_help, on_what_now=router.on_what_now)
+    router.node = node
+    api.HELP_SENT_HOOKS.append(router.help_sent)
+    return node.start()
+
+
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
     bus.bind(asyncio.get_running_loop())
     cam = None
     await api.startup()
+    state["wrist"] = _start_wrist(asyncio.get_running_loop())
     # The MVP coach loop runs the camera in the browser (MediaPipe). The edge-side
     # ArUco pipeline is opt-in (devices.edge_camera) so it doesn't hold the webcam.
     if CONFIG["devices"].get("edge_camera") and os.getenv("STEPWISE_NO_CAMERA") != "1":
@@ -58,6 +80,8 @@ async def lifespan(_app: FastAPI):
         except Exception as e:  # camera missing or permission denied: app still serves
             state["camera_error"] = str(e)
     yield
+    if state["wrist"]:
+        state["wrist"].stop()
     if state["pipeline"]:
         state["pipeline"].stop()
     if cam:
@@ -83,6 +107,7 @@ def health() -> dict:
         "ok": True,
         "devices": {k: CONFIG["devices"][k] for k in ("camera", "mic", "speaker", "wrist")},
         "camera": "ok" if p and not p.camera.error else (p.camera.error if p else state["camera_error"] or "browser"),
+        "wrist": state["wrist"].status if state["wrist"] else "off",
         "spacetimedb": api.stdb().public() | {"error": api.stdb().error},
         "voice_error": api.voice.error,
         "memory_error": api.memory.error,
