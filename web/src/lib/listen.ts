@@ -4,6 +4,8 @@
 // Paused while the app is speaking or thinking, so it doesn't hear its own voice
 // (the server also drops anything that matches what the app just said).
 
+import { getMedia } from './media'
+
 export type ListenPhase = 'off' | 'listening' | 'hearing' | 'paused'
 
 export interface ListenerOptions {
@@ -39,7 +41,7 @@ export class Listener {
   }
 
   async start() {
-    this.stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
+    this.stream = await getMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } })
     this.ctx = new AudioContext()
     this.an = this.ctx.createAnalyser()
     this.an.fftSize = 1024

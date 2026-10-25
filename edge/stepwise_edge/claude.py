@@ -68,9 +68,11 @@ def judge(model: str, effort: str, snapshots: list[bytes], ref: bytes | None, st
     return _call(model, effort, JUDGE_SYSTEM, content, CHECK_SCHEMA, max_tokens=4000)
 
 
-def answer(model: str, effort: str, question: str, frame: bytes | None, task_title: str, step: dict, step_no: int, total: int, notes: list[str] | None = None) -> tuple[str, float]:
+def answer(model: str, effort: str, question: str, frame: bytes | None, task_title: str, step: dict, step_no: int, total: int, notes: list[str] | None = None, history: list[tuple[str, str]] | None = None, seen: str = "") -> tuple[str, float]:
     memo = ("\nNotes about this worker (from memory):\n- " + "\n- ".join(notes)) if notes else ""
-    content: list = [{"type": "text", "text": f"Task: {task_title}. The worker is on step {step_no} of {total}.\n{_step_text(step)}{memo}\nThe worker said: \"{question}\""}]
+    talk = ("\nThe conversation so far:\n" + "\n".join(f'Worker: "{q}"\nCoach: "{a}"' for q, a in history)) if history else ""
+    screen = f"\nThe live camera check last reported (the worker's screen shows this): {seen}" if seen else ""
+    content: list = [{"type": "text", "text": f"Task: {task_title}. The worker is on step {step_no} of {total}.\n{_step_text(step)}{memo}{screen}{talk}\nThe worker said: \"{question}\""}]
     if frame:
         content += [{"type": "text", "text": "What the glasses see right now:"}, _img(frame)]
     out, ms = _call(model, effort, ANSWER_SYSTEM, content, None, max_tokens=4000)
@@ -99,3 +101,22 @@ def locate(model: str, effort: str, snapshot: bytes, step: dict, reason: str) ->
     """Where is the mistake? Used to draw the on-screen mark after a check said 'mistake'."""
     content: list = [{"type": "text", "text": f"{_step_text(step)}\nThe mistake seen: {reason}"}, _img(snapshot)]
     return _call(model, effort, LOCATE_SYSTEM, content, LOCATE_SCHEMA, max_tokens=4000)
+
+
+CUES_SYSTEM = """You write short spoken reminders for a job coach app. The worker is a capable adult with an
+intellectual or developmental disability who already knows these steps well. For each step, write a 2 to 4
+word cue that reminds them what to do: "Cup, one hand." "Words up." First-grade words. Never "no" or "wrong"."""
+
+CUES_SCHEMA = {
+    "type": "object",
+    "properties": {"cues": {"type": "array", "items": {"type": "string"}}},
+    "required": ["cues"],
+    "additionalProperties": False,
+}
+
+
+def cues(model: str, effort: str, task_title: str, instructions: list[str]) -> tuple[list[str], float]:
+    """Short cues (fading level 1) for steps that were taught before cues existed."""
+    lines = "\n".join(f"{i + 1}. {x}" for i, x in enumerate(instructions))
+    out, ms = _call(model, effort, CUES_SYSTEM, [{"type": "text", "text": f"Task: {task_title}\nSteps:\n{lines}\nWrite one cue per step, in order."}], CUES_SCHEMA, 2000)
+    return [str(c).strip() for c in out["cues"]], ms

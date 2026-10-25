@@ -41,6 +41,10 @@ PHRASES = {
     "ask_anytime": "You can ask me a question anytime.",
     "offer_help": "Do you need help? Say help, or press the help button.",
     "keep_going": "You're doing great. Keep going.",
+    # fading: said when SpacetimeDB promotes a step (the worker's screen hears the level_change event)
+    "level_up_1": "You remember this step! Now I'll just give you a short reminder.",
+    "level_up_2": "You've got this step! I'll only speak up if something needs fixing.",
+    "level_up_3": "You do this step all by yourself now!",
 }
 PRAISE_KEYS = [f"praise_{i}" for i in range(1, 7)]
 
@@ -183,3 +187,12 @@ class VoiceRegistry:
 
     def get(self, voice_id: str | None) -> dict | None:
         return self._all().get(voice_id) if voice_id else None
+
+    def default_id(self) -> str | None:
+        """The most recently added consented clone (dict order = insertion order), or None if there are none."""
+        ids = list(self._all())
+        return ids[-1] if ids else None
+
+    def resolve(self, voice_id: str | None) -> str | None:
+        """voice_id if it is a consented clone, else the default clone. Stock voice (None) only when no clone exists."""
+        return voice_id if self.get(voice_id) else self.default_id()

@@ -36,3 +36,6 @@ eval/test_set/*.jpg
 # Copied from node_modules by web postinstall
 web/public/mediapipe-wasm/
 spacetime/spacetime.local.json
+
+# Self-signed dev cert (made by run.sh)
+web/.cert/

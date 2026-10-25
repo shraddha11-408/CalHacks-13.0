@@ -75,6 +75,7 @@ export function LiveCheck({
   onFinished,
   onMistake,
   videoRef,
+  file = null,
 }: {
   cfg: PublicConfig
   sessionId: string
@@ -85,6 +86,8 @@ export function LiveCheck({
   onMistake?: (m: LoggedMistake) => void
   /** shares the camera <video> with the parent (e.g. for a help photo) */
   videoRef?: MutableRefObject<HTMLVideoElement | null>
+  /** an uploaded video stands in for the camera */
+  file?: File | null
 }) {
   const ring = useRef<FrameRing | null>(null)
   const ownVideo = useRef<HTMLVideoElement | null>(null)
@@ -192,6 +195,7 @@ export function LiveCheck({
         ringRef={ring}
         videoRef={video}
         onFrame={onFrame}
+        file={file}
         overlay={
           <>
             {flash > 0 && <div key={flash} className="flash" />}

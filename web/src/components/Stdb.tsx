@@ -6,7 +6,8 @@ import { DbConnection } from '../module_bindings'
 const TOKEN_KEY = 'stepwise-stdb-token'
 
 /** Connects to SpacetimeDB (local server or Maincloud, chosen in config.yaml) and renders children inside it. */
-export function StdbGate({ children }: { children: (error: string | null) => ReactNode }) {
+/** quiet: render nothing while connecting or on error (for pages that must work without the database). */
+export function StdbGate({ children, quiet = false }: { children: (error: string | null) => ReactNode; quiet?: boolean }) {
   const [cfg, setCfg] = useState<PublicConfig | null>(null)
   const [err, setErr] = useState<string | null>(null)
   useEffect(() => {
@@ -37,7 +38,7 @@ export function StdbGate({ children }: { children: (error: string | null) => Rea
       .onConnectError((_c, e) => setErr(`SpacetimeDB: ${e.message}`))
   }, [cfg])
 
-  if (err && !builder) return <p className="muted">{err}</p>
-  if (!builder) return <p className="muted">Connecting…</p>
+  if (err && !builder) return quiet ? null : <p className="muted">{err}</p>
+  if (!builder) return quiet ? null : <p className="muted">Connecting…</p>
   return <SpacetimeDBProvider connectionBuilder={builder}>{children(err)}</SpacetimeDBProvider>
 }

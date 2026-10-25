@@ -12,6 +12,9 @@ export interface Step {
   correction: string
   why: string
   reference_photo: string
+  praise?: string
+  cue?: string
+  close_look?: boolean
 }
 
 export interface Task {
@@ -56,6 +59,8 @@ export interface VideoJob {
 export interface PublicConfig {
   coach: TriggerConfig & { live_interval_s: number; live_parallel: number; live_snapshot_px: number; mark_with: 'live' | 'claude' | 'bitdeer'; done_min_gap_s: number; low_confidence: number; snapshot_px: number; keyframe_min_gap_s: number; keyframes_max: number; check_timeout_s: number }
   spacetimedb: { uri: string; db: string; ok: boolean }
+  /** the cloned voice every phrase is spoken in (task's clone, else the latest consented clone) */
+  voice_id?: string | null
   phrases: Record<string, Say>
 }
 
@@ -76,6 +81,9 @@ export interface StepPayload {
   memory: Memory[]
   memory_ms: number
   finished: boolean
+  /** support level of this step (0 full … 3 independent), from SpacetimeDB */
+  level?: number
+  levels?: Record<string, number>
 }
 
 export interface CheckResult {
@@ -138,6 +146,20 @@ export interface Progress {
   worded_by: string
 }
 
+export interface AgentSession {
+  agent_id: string
+  url: string
+  token: string
+  voice: { id: string; name: string; cloned: boolean }
+}
+
+export interface AgentToolResult {
+  result: string
+  ok: boolean
+  ui: { check?: CheckResult; help?: boolean; goto?: number }
+  latency_ms: number
+}
+
 export interface TalkResult {
   said: string
   intent: string
@@ -165,7 +187,7 @@ async function j<T>(r: Response): Promise<T> {
 const post = <T>(path: string, body: unknown) => fetch(`/api${path}`, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) }).then(j<T>)
 
 export const api = {
-  config: () => fetch('/api/public-config').then(j<PublicConfig>),
+  config: (taskId?: string) => fetch(`/api/public-config${taskId ? `?task_id=${encodeURIComponent(taskId)}` : ''}`).then(j<PublicConfig>),
   tasks: () => fetch('/api/tasks').then(j<{ task_id: string; title: string; steps: number }[]>),
   task: (id: string) => fetch(`/api/tasks/${id}`).then(j<Task>),
   teach: (title: string, frames: string[]) => post<Task & { latency_ms: number }>('/teach/steps', { title, frames }),
@@ -178,6 +200,7 @@ export const api = {
   goto: (sid: string, index: number) => post<StepPayload>(`/coach/${sid}/goto`, { index }),
   locate: (sid: string, image: string, reason: string) => post<{ box: number[] | null; fix: string; latency_ms: number }>(`/coach/${sid}/locate`, { image, reason }),
   end: (sid: string) => post<{ ok: boolean }>(`/coach/${sid}/end`, {}),
+  workerId: (name: string) => fetch(`/api/worker-id?name=${encodeURIComponent(name)}`).then(j<{ worker_id: string }>),
   progress: (sid: string) => fetch(`/api/coach/${sid}/progress`).then(j<Progress>),
   talk: (sid: string, audio: Blob, image: string) => {
     const f = new FormData()
@@ -185,6 +208,8 @@ export const api = {
     f.append('image', image)
     return fetch(`/api/coach/${sid}/talk`, { method: 'POST', body: f }).then(j<TalkResult>)
   },
+  agent: (sid: string) => post<AgentSession>(`/coach/${sid}/agent`, {}),
+  agentTool: (sid: string, tool: string, parameters: Record<string, unknown>, image = '') => post<AgentToolResult>(`/coach/${sid}/agent/tool`, { tool, parameters, image }),
   label: (image: string, task_id: string, step_id: number, label: string) => post<{ saved: string; count: number }>('/testset', { image, task_id, step_id, label }),
   videoDemo: () => fetch('/api/videos/demo').then(j<{ available: boolean; url?: string; name?: string; duration?: number }>),
   videos: () => fetch('/api/videos').then(j<{ video_id: string; name: string; created_at: number; tasks: { task_id: string; title: string; steps: number }[] }[]>),

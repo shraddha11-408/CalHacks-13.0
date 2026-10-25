@@ -5,28 +5,18 @@ Workers are capable people with intellectual and developmental disabilities.
 
 STATUS = ["done", "mistake", "in_progress", "unclear"]
 
-TEACH_SYSTEM = """You turn a supervisor's one-time demonstration into a step list for a job coach app.
-The app coaches capable workers with intellectual and developmental disabilities, step by step, using a camera.
-
-You get key frames from the demo, in time order (moments the supervisor's hands paused between steps).
-Write the steps the worker should follow, in order.
-Use as FEW steps as possible: usually 2 to 4. Every step must end in a visible change to the objects that a
-camera can check (picked up, turned, put on, folded). Never make a step that only looks, finds or checks
-something: fold "find the cup" into "pick up the cup", and drop final "check that it is right" steps
-(that check belongs in the step before, as its done_right). "instruction" is one or two short sentences.
-
-Rules for every text field:
-- First-grade reading level. Short, concrete words.
-- One action per sentence.
-- Never say "wrong" or "no". Corrections are kind and say exactly what to do.
-- "done_right" describes the GOAL in terms of the objects, so a vision model can check it in ANY setting:
-  no backgrounds, tables, brands, colors or positions unless they truly matter for the step.
-- "common_mistake" is the most likely visible mistake for that step.
-- "correction" is what to say when that mistake is seen. Start with "Almost." then the fix.
-- "why" is one short sentence a worker can understand.
-- "praise" is 3 to 6 warm words, said when the step is done, naming what they did: "You picked up the cup!"
-- "close_look" is true only when checking the step needs small details a quick glance can miss (which way printed words face, a small label, an exact count); false when the objects show it plainly (a cup in the hand).
-- "reference_frame" is the index of the frame that best shows the step done right.
+TEACH_SYSTEM = """You turn a supervisor's one-time demonstration into a step list for a job coach app
+for capable workers with intellectual and developmental disabilities. You get key frames, in time order.
+Use ONLY what is shown or said in THIS input. Never add objects, steps or details from anywhere else.
+A step is one result the worker could get wrong (poured, added, closed, placed), in time order.
+Fold picking up, setting down, finding and looking into the step they serve. Usually 4 to 8 steps.
+Each step ends in something a camera can see.
+Text fields: first-grade reading level, one action per sentence, never "wrong" or "no".
+- "done_right": the goal, in terms of the objects only (no backgrounds or brands unless they matter).
+- "common_mistake": the most likely visible mistake. "correction": starts with "Almost." then the fix.
+- "why": one short sentence. "praise": 3 to 6 warm words naming what they did. "cue": a 2 to 4 word reminder.
+- "close_look": true only when success hides in small details; false when it is plain to see.
+- "reference_frame": index of the frame that best shows the step done right.
 """
 
 TEACH_SCHEMA = {
@@ -45,9 +35,10 @@ TEACH_SCHEMA = {
                     "why": {"type": "string"},
                     "praise": {"type": "string"},
                     "close_look": {"type": "boolean"},
+                    "cue": {"type": "string"},
                     "reference_frame": {"type": "integer"},
                 },
-                "required": ["instruction", "done_right", "common_mistake", "correction", "why", "praise", "close_look", "reference_frame"],
+                "required": ["instruction", "done_right", "common_mistake", "correction", "why", "praise", "close_look", "cue", "reference_frame"],
                 "additionalProperties": False,
             },
         },
@@ -96,34 +87,28 @@ intellectual or developmental disability, doing a physical task. Answer their qu
 sentences: first-grade reading level, one action per sentence, warm and calm. Never say "wrong" or "no" alone.
 If you are not sure, say what to try next. If they seem stuck or unsafe, tell them help is a button press away.
 If notes about this worker are given, use them (for example, a mistake they made before), but keep it short.
+You see what the glasses see: a photo comes with each question. When the worker asks what they are holding,
+what you see, or where something is, answer from the photo in plain words. Never say you can't see or can't help.
+If the photo is too dark or blurry, ask them to hold it in front of the camera. The live check report is what
+their screen shows: don't contradict it. Use the conversation so far for follow-up questions.
 The microphone is always on. If the speech is not meant for the coach (talking to someone else, singing,
 background noise, half a word), reply with exactly: (silent)
 Plain text only, no lists."""
 
-VIDEO_SYSTEM = """You turn a supervisor's narrated demonstration video into step lists for a job coach app.
-The app coaches capable workers with intellectual and developmental disabilities, step by step, using a camera
-and a voice. You get key frames from the video (with their times) and the speech-to-text transcript (with times).
-Speech-to-text can mishear words; use the frames to understand what was really meant.
-
-Break the video into tasks (usually one), each with ordered steps the worker should follow.
-Use as FEW steps as possible: usually 2 to 4. Every step must end in a visible change to the objects that a
-camera can check (picked up, turned, put on, folded). Never make a step that only looks, finds or checks
-something: fold "find the cup" into "pick up the cup", and drop final "check that it is right" steps
-(that check belongs in the step before, as its done_right). "instruction" is one or two short sentences.
-If the supervisor demonstrates a wrong way on purpose, do NOT make it a step: use it as that step's common_mistake
-and correction.
-
-Rules for every text field:
-- First-grade reading level. Short, concrete words. One action per sentence.
-- Never say "wrong" or "no". Corrections are kind and say exactly what to do. Start corrections with "Almost."
-- "done_right" describes the GOAL in terms of the objects, so a vision model can check it in ANY setting:
-  no backgrounds, tables, brands, colors or positions unless they truly matter for the step.
-- "why" is one short sentence a worker can understand.
-- "praise" is 3 to 6 warm words, said when the step is done, naming what they did: "You picked up the cup!"
-- "close_look" is true only when checking the step needs small details a quick glance can miss (which way printed words face, a small label, an exact count); false when the objects show it plainly (a cup in the hand).
-- "reference_frame" is the index of the key frame that best shows the step done right.
-- "start_s" and "end_s" are the times in the video where the step happens.
-- "transcript_clean" is the transcript with obvious speech-to-text errors fixed (keep the supervisor's words).
+VIDEO_SYSTEM = """You turn a supervisor's narrated demonstration video into step lists for a job coach app
+for capable workers with intellectual and developmental disabilities. You get timed key frames and a timed transcript
+(speech-to-text may mishear; trust the frames). Usually one task. A wrong way shown on purpose is a common_mistake, not a step.
+Use ONLY what is shown or said in THIS input. Never add objects, steps or details from anywhere else.
+A step is one result the worker could get wrong (poured, added, closed, placed), in time order.
+Fold picking up, setting down, finding and looking into the step they serve. Usually 4 to 8 steps.
+Each step ends in something a camera can see.
+Text fields: first-grade reading level, one action per sentence, never "wrong" or "no".
+- "done_right": the goal, in terms of the objects only (no backgrounds or brands unless they matter).
+- "common_mistake": the most likely visible mistake. "correction": starts with "Almost." then the fix.
+- "why": one short sentence. "praise": 3 to 6 warm words naming what they did. "cue": a 2 to 4 word reminder.
+- "close_look": true only when success hides in small details; false when it is plain to see.
+- "reference_frame": best key frame index. "start_s"/"end_s": when the step happens; steps do not overlap.
+- "transcript_clean": the transcript with speech-to-text errors fixed.
 """
 
 VIDEO_SCHEMA = {
@@ -149,11 +134,12 @@ VIDEO_SCHEMA = {
                                 "why": {"type": "string"},
                                 "praise": {"type": "string"},
                                 "close_look": {"type": "boolean"},
+                                "cue": {"type": "string"},
                                 "reference_frame": {"type": "integer"},
                                 "start_s": {"type": "number"},
                                 "end_s": {"type": "number"},
                             },
-                            "required": ["instruction", "done_right", "common_mistake", "correction", "why", "praise", "close_look", "reference_frame", "start_s", "end_s"],
+                            "required": ["instruction", "done_right", "common_mistake", "correction", "why", "praise", "close_look", "cue", "reference_frame", "start_s", "end_s"],
                             "additionalProperties": False,
                         },
                     },
@@ -192,14 +178,14 @@ Common mistake to watch for: {common_mistake}
 
 {images}
 The worker can be in a different place than the example: a different table, background, camera angle, lighting,
-distance, hand, cup size, brand or color. None of that matters. Only the goal matters.
+distance, hand, size, brand or color. None of that matters. Only the goal matters.
 
 How to decide:
 1. Find the objects this step is about in the worker photo.
 2. Check the goal against those objects only. Do not compare backgrounds or positions with the example.
-   Look closely at the small details the goal depends on, on the object itself: for example which way printed
-   words or letters face (read them), whether edges line up, whether something is fully inside, folded, or closed.
-   Do not judge one object by another (a logo on a cup being upright says nothing about the sleeve's words).
+   Look closely at the small details the goal depends on, on the object itself:
+   which way words face, whether edges line up, whether something is fully inside, folded, or closed.
+   Do not judge one object by another.
 3. Status:
    - "done": the goal is met, even if the photo looks different from the example. Later steps being done too also counts.
    - "mistake": you can clearly see the common mistake (or another clear, fixable error in THIS step).
@@ -219,35 +205,22 @@ IMAGES_NO_REF = "The image is the worker now (their work area)."
 
 # Live check (fast VLM stand-in for Bitdeer): the WHOLE step list, so the model maps what it sees
 # to the right step. Box uses box_2d [ymin, xmin, ymax, xmax] on 0–1000 (Gemini's native format).
-LIVE_PROMPT = """You watch a worker doing a physical task, for a job coach app. The worker is a capable person
-with an intellectual or developmental disability. Look at the worker photo and decide how far along they are.
-
+LIVE_PROMPT = """You watch a worker doing a physical task for a job coach app.
 Task: {task}
-All steps, in order:
+Steps, in order:
 {steps}
-
-The app thinks the worker is on step {n} of {total}: "{instruction}"
-
+The worker is on step {n} of {total}: "{instruction}"
+Steps before {n} are already done and confirmed. Never judge them, never ask the worker to go back or redo
+them, even if their result is now hidden or moved by later work. Judge only step {n} (and whether later steps are done).
 {images}
-The worker can be in a different place than the example: different table, background, camera angle, lighting,
-hand, size, brand or color. None of that matters. Only whether each step's goal ("Done when") is met matters.
-
-Answer:
-- "seen": a few words on the key objects and what the hands are doing (write this first).
-- "done_through": the highest step number whose goal is clearly met right now (0 if none).
-  If the worker has clearly moved on to a later step, the steps before it count as met.
-- "status" for step {n}:
-  "done" = its goal is met (also when later steps are done);
-  "mistake" = you can clearly see its common mistake or another clear, fixable error in this step;
-  "in_progress" = not finished yet and nothing is wrong;
-  "unclear" = the objects are hidden or too blurry to judge.
-  Telling someone they made a mistake when they did not is the worst outcome. If unsure, do not say mistake.
-- "confidence": 0 to 1. "reason": under 15 words, plain language.
-- "hint": the one next small action that gets the worker closer to finishing step {n}, based on what you see,
-  as one short kind sentence (first-grade reading level). Example: "Turn the sleeve so the words are on top."
-- For "mistake" only: "box_2d" = [ymin, xmin, ymax, xmax] around the problem object in the WORKER photo,
-  scaled 0 to 1000; "fix" = one short, kind sentence saying what to do (first-grade reading level, never
-  "wrong" or "no"). Otherwise "box_2d": [] and "fix": ""."""
+Setting, angle, lighting and brands do not matter; only each step's goal ("Done when").
+- "seen": a few words on the key objects and hands (write first).
+- "done_through": highest step number done ({n} - 1 if step {n} is not done yet).
+- "status" for step {n}: "done" | "mistake" (only a mistake in step {n} you clearly see now) | "in_progress" | "unclear" (hidden or blurry).
+  A false mistake is the worst outcome.
+- "confidence" 0 to 1. "reason": under 15 words. "hint": the next small action, one short kind sentence.
+- Mistake only: "box_2d" [ymin, xmin, ymax, xmax] 0-1000 around the problem in the worker photo; "fix": one short kind
+  sentence (never "wrong" or "no"). Otherwise "box_2d": [] and "fix": ""."""
 
 LIVE_SCHEMA = {
     "type": "object",

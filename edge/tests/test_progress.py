@@ -31,3 +31,9 @@ def test_template_states_only_facts():
     t = template("Jordan", n)
     assert t.startswith("You did 2 steps by yourself today!") and "fewer reminders than last time" in t
     assert template("Jordan", {}) == "Good work today!"
+
+
+def test_template_celebrates_level_ups():
+    n = session_numbers("now", SESS, EV, TITLES, 3)
+    n["level_ups"] = [{"step": "Pick up the cup.", "now": "a short reminder"}]
+    assert "say less now" in template("Jordan", n)

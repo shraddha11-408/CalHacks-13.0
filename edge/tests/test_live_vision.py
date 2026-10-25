@@ -1,4 +1,4 @@
-from stepwise_edge.live_vision import box_from_2d, build_prompt, parse, provider
+from stepwise_edge.live_vision import box_from_2d, build_prompt, parse, source_of
 
 TASK = {"title": "Sleeve a cup", "steps": [
     {"id": 1, "instruction": "Pick up the cup.", "done_right": "Cup in hand.", "common_mistake": "Cup on table."},
@@ -22,24 +22,15 @@ def test_parse_clamps_and_only_boxes_mistakes():
 
 def test_prompt_lists_every_step_and_current():
     p = build_prompt(TASK["steps"][1], TASK, has_ref=False)
-    assert "1. Pick up the cup." in p and "2. Slide the sleeve on." in p and 'step 2 of 2: "Slide the sleeve on."' in p
+    assert "1. [DONE] Pick up the cup." in p and "2. Slide the sleeve on." in p and 'step 2 of 2: "Slide the sleeve on."' in p
+    assert "never ask the worker to go back" in p
 
 
-def test_auto_provider(monkeypatch):
-    monkeypatch.delenv("GEMINI_API_KEY", raising=False)
-    assert provider("auto") == "claude"
-    monkeypatch.setenv("GEMINI_API_KEY", "k")
-    assert provider("auto") == "gemini" and provider("claude") == "claude"
-
-
-def test_auto_falls_back_to_claude_when_gemini_is_busy(monkeypatch):
+def test_one_model_sonnet(monkeypatch):
     from stepwise_edge import live_vision as lv
 
-    monkeypatch.setenv("GEMINI_API_KEY", "k")
-    monkeypatch.setattr(lv, "_gemini_rest_until", 0.0)
-    monkeypatch.setattr(lv, "_gemini_call", lambda *a: (_ for _ in ()).throw(RuntimeError("429 RESOURCE_EXHAUSTED")))
-    monkeypatch.setattr(lv, "_claude_call", lambda *a: {"status": "in_progress", "confidence": 0.8, "done_through": 0})
-    models = {"live_vision": "auto", "gemini_live": "g", "claude_live": "claude-haiku-5-5"}
-    r, _, src = lv.check(models, b"x", None, TASK["steps"][0], TASK)
-    assert src == "haiku" and r["status"] == "in_progress"
-    assert lv.provider("auto") == "claude"  # resting
+    seen = {}
+    monkeypatch.setattr(lv, "_claude_call", lambda model, *a: seen.setdefault("model", model) and {"status": "mistake", "confidence": 0.9, "done_through": 0, "fix": "Turn it."})
+    r, _, src = lv.check({"claude_live": "claude-sonnet-5-5"}, b"x", None, TASK["steps"][1], TASK)
+    assert seen["model"] == "claude-sonnet-5-5" and src == "sonnet" and r["status"] == "mistake" and r["fix"] == "Turn it."
+    assert source_of("claude-haiku-5-5") == "haiku" and source_of("claude-opus-5-5") == "claude"

@@ -2,6 +2,9 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { AppShell } from '../components/AppShell'
 import { LiveCheck, type LoggedMistake } from '../components/LiveCheck'
+import { StdbGate } from '../components/Stdb'
+import { WorkerFading, type LevelChangeEvent } from '../components/WorkerFading'
+import { levelOf } from '../lib/levels'
 import { CaptionBar, StepDots } from '../components/ui'
 import { api, type Progress, type PublicConfig, type StepPayload, type TalkResult, type Task } from '../lib/api'
 import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
@@ -53,6 +56,9 @@ function NameGate({ children }: { children: (name: string, change: () => void) =
   )
 }
 
+// Not taught yet: shown in the list so workers see what's coming, but they can't be started.
+const PLACEHOLDER_TASKS = ['Restock new produce', 'Manage shift timings']
+
 /** /worker — "View my tasks". */
 export function WorkerPage() {
   const [tasks, setTasks] = useState<{ task_id: string; title: string; steps: number }[] | null>(null)
@@ -76,7 +82,6 @@ export function WorkerPage() {
             <h2 className="section-title">My tasks</h2>
             {err && <p className="note-almost">{err}</p>}
             {tasks === null && !err && <p className="muted">Loading…</p>}
-            {tasks?.length === 0 && <p className="muted">No tasks yet. Ask your supervisor to add one.</p>}
             <div className="task-list">
               {tasks?.map((t) => (
                 <Link key={t.task_id} to={`/worker/${t.task_id}`} className="task-row">
@@ -84,6 +89,13 @@ export function WorkerPage() {
                   <span className="muted">{t.steps} steps →</span>
                 </Link>
               ))}
+              {tasks &&
+                PLACEHOLDER_TASKS.map((title) => (
+                  <div key={title} className="task-row soon" aria-disabled="true">
+                    <span className="task-row-title">{title}</span>
+                    <span className="muted">Coming soon</span>
+                  </div>
+                ))}
             </div>
           </div>
         )}
@@ -93,6 +105,7 @@ export function WorkerPage() {
 }
 
 type Phase = 'overview' | 'running' | 'summary'
+
 
 /** /worker/:taskId — the steps, then the camera, then the mistake log. */
 export function WorkerTaskPage() {
@@ -119,20 +132,24 @@ function WorkerTask({ taskId }: { taskId: string }) {
   const [chat, setChat] = useState<{ said: string; answer: string }[]>([])
   const [thinking, setThinking] = useState(false)
   const [progress, setProgress] = useState<Progress | null>(null)
+  const [workerId, setWorkerId] = useState('')
+  const [levels, setLevels] = useState<Record<number, number>>({})
+  const [levelUp, setLevelUp] = useState<{ text: string; at: number } | null>(null)
+  const [demoVideo, setDemoVideo] = useState<File | null>(null) // demo: a recorded video plays in place of the camera
   const thinkingRef = useRef(false)
   const audio = useRef<AudioQueue | null>(null)
   const sidRef = useRef<string | null>(null)
   const video = useRef<HTMLVideoElement | null>(null)
   const quietNext = useRef(false)
-
   useEffect(() => {
     audio.current = new AudioQueue()
     audio.current.onCaption = (t, s) => {
       if (t) setCaption(t)
       setSpeaking(s)
     }
-    api.config().then(setCfg).catch(() => {})
+    api.config(taskId).then(setCfg).catch(() => {})
     api.task(taskId).then(setTask).catch((e) => setErr(e.message))
+    api.workerId(readName() || 'Worker').then((r) => setWorkerId(r.worker_id)).catch(() => {})
     return () => {
       audio.current?.stop()
       if (sidRef.current) void api.end(sidRef.current)
@@ -140,7 +157,9 @@ function WorkerTask({ taskId }: { taskId: string }) {
   }, [taskId])
 
   // the worker pressed a button: always say it
-  const voiceId = task?.voice?.id
+  const voiceId = task?.voice?.id ?? cfg?.voice_id ?? undefined // always the cloned voice
+  const voiceRef = useRef(voiceId)
+  voiceRef.current = voiceId
   const say = useCallback((text: string) => audio.current?.say([{ text, url: ttsUrl(text, voiceId) }], 'answer', { force: true }), [voiceId])
   const playSay = useCallback((items: Say[], kind: SpeechKind) => audio.current?.say(items, kind), [])
   const step = task?.steps[i]
@@ -151,8 +170,9 @@ function WorkerTask({ taskId }: { taskId: string }) {
       quietNext.current = false
       return
     }
-    if (phase === 'running' && step) audio.current?.say([{ text: step.instruction, url: ttsUrl(step.instruction, voiceId) }], 'advance', { force: true })
-  }, [phase, step, voiceId])
+    if (phase === 'running' && step) audio.current?.say([{ text: step.instruction, url: ttsUrl(step.instruction, voiceRef.current) }], 'advance', { force: true })
+    // voiceId is read through a ref: config arriving late must not re-speak the step in a second voice
+  }, [phase, step])
 
   const finish = useCallback((complete: boolean) => {
     const id = sidRef.current
@@ -204,6 +224,29 @@ function WorkerTask({ taskId }: { taskId: string }) {
     finish(true)
   }, [finish])
   const onMistake = useCallback((m: LoggedMistake) => setMistakes((xs) => [...xs, m]), [])
+
+  // SpacetimeDB just changed a support level (fading rules, or the job coach). Celebrate promotions out
+  // loud; a step back to more help is never announced to the worker (dignity), the coach sees it.
+  const onLevelChange = useCallback(
+    (e: LevelChangeEvent) => {
+      if (e.to <= e.from || !task) return
+      const n = task.steps.findIndex((x) => x.id === e.stepId) + 1
+      const label = `Step ${n}: ${levelOf(e.to).worker}`
+      if (e.reason === 'promote') {
+        const line = cfg?.phrases[`level_up_${e.to}`]?.text
+        if (line) audio.current?.say([{ text: line, url: ttsUrl(line, voiceRef.current) }], 'answer', { force: true })
+        setLevelUp({ text: `Level up! ${label}`, at: Date.now() })
+      } else {
+        setLevelUp({ text: `${e.by} moved ${label}`, at: Date.now() })
+      }
+    },
+    [cfg, task],
+  )
+  useEffect(() => {
+    if (!levelUp) return
+    const t = window.setTimeout(() => setLevelUp(null), 7000)
+    return () => window.clearTimeout(t)
+  }, [levelUp])
 
   /** One utterance from the always-on mic → speech-to-text → answer (or a check, a hint, help). */
   const ask = useCallback(
@@ -302,6 +345,18 @@ function WorkerTask({ taskId }: { taskId: string }) {
 
   return (
     <AppShell back={phase === 'running' ? undefined : { to: '/worker', label: 'My tasks' }}>
+      <StdbGate quiet>
+        {() =>
+          workerId ? (
+            <WorkerFading workerId={workerId} workerName={readName() || 'Worker'} taskId={task.task_id} onLevels={setLevels} onLevelChange={onLevelChange} />
+          ) : null
+        }
+      </StdbGate>
+      {levelUp && (
+        <div className="levelup" role="status">
+          <span aria-hidden>★</span> {levelUp.text}
+        </div>
+      )}
       {err && <p className="note-almost">{err}</p>}
 
       {phase === 'overview' && (
@@ -316,7 +371,9 @@ function WorkerTask({ taskId }: { taskId: string }) {
               <li key={s.id} className="step-item">
                 <img src={apiUrl(s.reference_photo)} alt={s.done_right} />
                 <div className="stack" style={{ gap: 4 }}>
-                  <span className="step-n">Step {k + 1}</span>
+                  <span className="step-n">
+                    Step {k + 1} <LevelBadge level={levels[s.id] ?? 0} />
+                  </span>
                   <p className="step-text">{s.instruction}</p>
                   <button className="btn btn-ghost btn-sm" onClick={() => say(s.instruction)}>
                     🔊 Hear it
@@ -325,10 +382,28 @@ function WorkerTask({ taskId }: { taskId: string }) {
               </li>
             ))}
           </ol>
+          <div className="video-pick">
+            <label className="btn btn-secondary">
+              📹 {demoVideo ? 'Pick another video' : 'Use a video instead of the camera'}
+              <input type="file" accept="video/*" hidden onChange={(e) => setDemoVideo(e.target.files?.[0] ?? null)} />
+            </label>
+            {demoVideo && (
+              <>
+                <span className="small">
+                  Using <strong>{demoVideo.name}</strong>
+                </span>
+                <button className="btn btn-ghost btn-sm" onClick={() => setDemoVideo(null)}>
+                  Use the camera
+                </button>
+              </>
+            )}
+          </div>
           <button className="btn btn-primary btn-xl btn-block" onClick={start} disabled={!cfg}>
-            📷 Start task
+            {demoVideo ? '▶ Start task with the video' : '📷 Start task'}
           </button>
-          <p className="small muted center">The camera turns on. Your face is blurred, and no video is saved.</p>
+          <p className="small muted center">
+            {demoVideo ? 'The video plays here and is checked like the camera. It stays in this browser.' : 'The camera turns on. Your face is blurred, and no video is saved.'}
+          </p>
         </div>
       )}
 
@@ -337,7 +412,7 @@ function WorkerTask({ taskId }: { taskId: string }) {
           <div className="run-main stack" style={{ gap: 14 }}>
             <div className="spread">
               <span className="step-n">
-                Step {i + 1} of {task.steps.length}
+                Step {i + 1} of {task.steps.length} <LevelBadge level={levels[step.id] ?? 0} />
               </span>
               <StepDots total={task.steps.length} current={i} />
             </div>
@@ -345,9 +420,9 @@ function WorkerTask({ taskId }: { taskId: string }) {
             <div className="row" style={{ gap: 8 }}>
               <button className={`mic-chip mic-${micOn ? (thinking ? 'thinking' : listen) : 'off'}`} onClick={() => setMicOn((m) => !m)} aria-pressed={micOn} aria-label={micOn ? 'Microphone on. Turn off' : 'Microphone off. Turn on'}>
                 <span className="mic-dot" aria-hidden />
-                {!micOn ? 'Mic off' : thinking ? 'Thinking…' : listen === 'hearing' ? 'Hearing you…' : listen === 'paused' ? 'Coach is talking' : 'Listening — just ask'}
+                {!micOn ? 'Mic off' : thinking ? 'Thinking…' : listen === 'hearing' ? 'Hearing you…' : listen === 'paused' ? `${task.voice?.name ?? 'Coach'} is talking` : `Talk to ${task.voice?.name ?? 'your coach'} — just ask`}
               </button>
-              <span className="small muted">Try: “Is this right?” · “I'm stuck” · “Why?” · “Help”</span>
+              <span className="small muted">Try: “What am I holding?” · “Is this right?” · “I'm stuck” · “Help”</span>
             </div>
             {chat.length > 0 && (
               <ul className="chat" aria-live="polite">
@@ -359,7 +434,7 @@ function WorkerTask({ taskId }: { taskId: string }) {
                 ))}
               </ul>
             )}
-            <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} />
+            <LiveCheck cfg={cfg} sessionId={sid} onSay={playSay} onStep={onLiveStep} onFinished={onLiveFinished} onMistake={onMistake} videoRef={video} file={demoVideo} />
             <div className="row">
               <button className="btn btn-secondary" onClick={() => say(step.instruction)}>
                 🔊 Hear it
@@ -441,6 +516,20 @@ function WorkerTask({ taskId }: { taskId: string }) {
       )}
       {phase !== 'overview' && <CaptionBar text={caption || ' '} speaking={speaking} />}
     </AppShell>
+  )
+}
+
+/** Support level of a step, from SpacetimeDB: four pips, filled as the worker needs less help. */
+function LevelBadge({ level }: { level: number }) {
+  return (
+    <span className={`lvl lvl-${level}`} title={levelOf(level).says}>
+      <span className="pips" aria-hidden>
+        {[0, 1, 2, 3].map((p) => (
+          <i key={p} className={p <= level ? 'on' : ''} />
+        ))}
+      </span>
+      {levelOf(level).worker}
+    </span>
   )
 }
 

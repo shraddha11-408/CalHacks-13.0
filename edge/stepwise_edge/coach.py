@@ -62,9 +62,12 @@ class CoachSession:
     step_started_at: float = field(default_factory=time.monotonic)  # for "stuck" guidance
     stuck_level: int = 0
     praise_i: int = 0
-    confirm_in_flight: bool = False
+    levels: dict = field(default_factory=dict)  # step id → support level 0–3 (fading; SpacetimeDB is the authority)
+    flags: dict = field(default_factory=dict)  # step id → what happened on it this session (decides its outcome)
     spoken: collections.deque = field(default_factory=lambda: collections.deque(maxlen=12))  # (t, text) the app said
     last_done_at: float = 0.0
+    talk_log: collections.deque = field(default_factory=lambda: collections.deque(maxlen=4))  # (worker said, coach answered)
+    last_seen: str = ""  # the live check's latest result, as the screen shows it (for spoken answers)
 
     @property
     def steps(self) -> list[dict]:
@@ -113,6 +116,24 @@ class CoachSession:
         """Count an unclear result. True when it's time to ask Claude."""
         self.unclear += 1
         return self.unclear >= escalate_after
+
+    def level_of(self, step: dict | None = None) -> int:
+        """0 full instruction · 1 short cue · 2 alerts only · 3 independent."""
+        return int(self.levels.get(int((step or self.step)["id"]), 0))
+
+    def flag(self, key: str, step: dict | None = None) -> None:
+        f = self.flags.setdefault(int((step or self.step)["id"]), {"corrections": 0, "help": 0, "hinted": 0})
+        f[key] += 1
+
+    def outcome(self, step_id: int, by_hand: bool = False) -> str:
+        """clean: done with no correction, hint or help · error: a correction or a help request ·
+        assisted: a hint, or moved on by hand. Only clean runs move a step toward independence."""
+        f = self.flags.get(int(step_id), {})
+        if f.get("corrections") or f.get("help"):
+            return "error"
+        if by_hand or f.get("hinted"):
+            return "assisted"
+        return "clean"
 
     def new_step(self) -> None:
         """Restart the stuck timer (advance, or the worker moved by hand)."""

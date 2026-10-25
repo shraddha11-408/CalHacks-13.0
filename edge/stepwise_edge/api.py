@@ -19,6 +19,7 @@ from fastapi.responses import FileResponse
 from pydantic import BaseModel
 
 from . import claude, live_vision, progress, report, vision
+from .agent import WS as AGENT_WS, CartesiaAgent
 from .coach import CoachSession, intent_of, spoken_tip
 from .config import ROOT, load_config
 from .memory import Memory, slug
@@ -37,14 +38,14 @@ store = TaskStore(DATA)
 voice = Voice(DATA / "audio")
 memory = Memory(DATA / "moss")
 voices = VoiceRegistry(DATA / "voices.json")
+agent = CartesiaAgent(DATA / "cartesia_agent.json")
 # The voice this request speaks in: the task's consented clone of its supervisor, else the stock voice.
 # Set once per session request (_sess / coach_start); asyncio tasks and to_thread copy it.
 CURRENT_VOICE: contextvars.ContextVar[str | None] = contextvars.ContextVar("voice", default=None)
 
 
 def task_voice(task: dict) -> str | None:
-    v = (task.get("voice") or {}).get("id")
-    return v if voices.get(v) else None
+    return voices.resolve((task.get("voice") or {}).get("id"))
 sessions: dict[str, CoachSession] = {}
 ended: dict[str, CoachSession] = {}  # recently ended, for the spoken progress summary
 _stdb: Stdb | None = None
@@ -53,7 +54,7 @@ _stdb: Stdb | None = None
 def stdb() -> Stdb:
     global _stdb
     if _stdb is None:
-        _stdb = Stdb(CFG)
+        _stdb = Stdb(CFG, DATA / "stdb_identity.json")
     return _stdb
 
 
@@ -68,7 +69,7 @@ def b64jpg(s: str) -> bytes:
 
 def say(text: str, cached_only: bool = False) -> dict:
     """A phrase to speak in this request's voice: cached clip URL if present, else an on-demand TTS URL."""
-    v = CURRENT_VOICE.get()
+    v = CURRENT_VOICE.get() or voices.default_id()  # never the stock voice while a clone exists
     if voice.path(text, v).exists():
         return {"text": text, "url": voice.url(text, v)}
     from urllib.parse import quote
@@ -90,15 +91,26 @@ async def run_model(fn, *args, timeout: float | None = None):
 
 # ---------- public config ----------
 @router.get("/public-config")
-def public_config() -> dict:
-    return {"coach": COACH, "spacetimedb": stdb().public(), "phrases": {k: say(v) for k, v in PHRASES.items()}}
+def public_config(task_id: str | None = None) -> dict:
+    v = voices.default_id()
+    if task_id:
+        try:
+            v = task_voice(store.get(task_id))
+        except Exception:
+            pass
+    tok = CURRENT_VOICE.set(v)
+    try:
+        phrases = {k: say(p) for k, p in PHRASES.items()}
+    finally:
+        CURRENT_VOICE.reset(tok)
+    return {"coach": COACH, "spacetimedb": stdb().public(), "voice_id": v, "phrases": phrases}
 
 
 async def startup() -> None:
     """Called from the app lifespan. Pre-records fixed phrases; never blocks startup on the network."""
     async def go():
         try:
-            await asyncio.to_thread(voice.ensure_many, list(PHRASES.values()))
+            await asyncio.to_thread(voice.ensure_many, list(PHRASES.values()), voices.default_id())
         except Exception as e:
             voice.error = f"{type(e).__name__}: {str(e)[:120]}"
             log.warning("phrase pre-record failed: %s", e)
@@ -111,8 +123,7 @@ async def startup() -> None:
 async def tts(text: str, voice_id: str | None = Query(None, alias="voice")):
     if not text.strip() or len(text) > 400:
         raise HTTPException(400, "text must be 1–400 characters")
-    if voice_id and not voices.get(voice_id):
-        voice_id = None  # only consented clones (or the stock voice) ever speak
+    voice_id = voices.resolve(voice_id)  # only consented clones speak; stock voice only if none exist
     try:
         await asyncio.to_thread(voice.ensure, text, voice_id)
     except Exception as e:
@@ -158,7 +169,7 @@ async def save_task(task_id: str, req: SaveTaskReq) -> dict:
     task = store.get(task_id)
     if not task:
         raise HTTPException(404, "no such task")
-    keep = ("instruction", "done_right", "common_mistake", "correction", "why", "praise", "reference_photo")
+    keep = ("instruction", "done_right", "common_mistake", "correction", "why", "praise", "cue", "reference_photo")
     flags = ("close_look",)
     steps = []
     for s in req.steps:
@@ -175,7 +186,7 @@ async def save_task(task_id: str, req: SaveTaskReq) -> dict:
     store.save(task)
     stdb().call("save_task", task_id, task["title"], json.dumps(steps))
     # Pre-record every instruction, correction and reason so playback is instant.
-    texts = [t for s in steps for t in (s["instruction"], s["correction"], s["why"], s.get("praise", "")) if t]
+    texts = [t for s in steps for t in (s["instruction"], s["correction"], s["why"], s.get("praise", ""), s.get("cue", "")) if t]
     t0 = time.perf_counter()
     try:
         await asyncio.to_thread(voice.ensure_many, texts, task_voice(task))
@@ -216,16 +227,31 @@ class StartReq(BaseModel):
     task_id: str
 
 
+async def _levels(s: CoachSession) -> dict[int, int] | None:
+    """Support levels from SpacetimeDB (the authority). None on any problem: the caller keeps what it had,
+    and a step nobody has measured yet is level 0 (full support), which is always safe."""
+    try:
+        return await asyncio.wait_for(asyncio.to_thread(stdb().mastery_levels, s.worker_id, s.task["task_id"]), 0.4)
+    except Exception as e:
+        log.info("support levels unavailable, keeping current: %s", type(e).__name__)
+        return None
+
+
 async def step_payload(s: CoachSession) -> dict:
     st = s.step
+    fresh = await _levels(s)  # a coach's override takes effect from the next step
+    if fresh is not None:
+        s.levels = fresh
+    lvl = s.level_of()
     mems, ms = await memory.recall(s.worker_id, f"{st['instruction']}. {st['common_mistake']}")
     speak = []
-    tip = next((m for m in mems if m.get("kind") == "mistake" and m.get("tip")), None)
-    if tip:
-        phrase = spoken_tip(tip["tip"])
-        if phrase:
-            speak.append(say(phrase))
-    speak.append(say(st["instruction"]))
+    if lvl <= 1:  # levels 2–3 (alerts only, independent): no instruction; the screen still shows it
+        tip = next((m for m in mems if m.get("kind") == "mistake" and m.get("tip")), None)
+        if tip:
+            phrase = spoken_tip(tip["tip"])
+            if phrase:
+                speak.append(say(phrase))
+        speak.append(say(st["instruction"] if lvl == 0 else (st.get("cue") or st["instruction"])))
     s.last_said = " ".join(x["text"] for x in speak)
     s.note_spoken([x["text"] for x in speak])
     return {
@@ -237,6 +263,8 @@ async def step_payload(s: CoachSession) -> dict:
         "memory": mems,
         "memory_ms": round(ms, 2),
         "finished": s.finished,
+        "level": lvl,
+        "levels": {str(k): v for k, v in s.levels.items()},
     }
 
 
@@ -251,7 +279,27 @@ async def coach_start(req: StartReq) -> dict:
     CURRENT_VOICE.set(task_voice(task))
     stdb().call("upsert_worker", wid, s.worker_name)
     stdb().call("start_session", s.id, wid, task["task_id"])
+    s.levels = await _levels(s) or {}
+    if any(not st.get("cue") for st in task["steps"]):
+        asyncio.create_task(_safe(_backfill_cues(task, s)))  # older tasks: write level-1 cues, never blocks the start
     return {**await step_payload(s), "task": {"task_id": task["task_id"], "title": task["title"]}, "worker_id": wid}
+
+
+async def _backfill_cues(task: dict, s: CoachSession | None = None) -> None:
+    """Tasks taught before fading existed have no short cue per step: write them once, save, pre-record."""
+    cues, ms = await run_model(claude.cues, M["claude_answer"], "low", task["title"], [st["instruction"] for st in task["steps"]], timeout=20)
+    if len(cues) != len(task["steps"]):
+        return
+    for st, cue in zip(task["steps"], cues):
+        if not st.get("cue"):
+            st["cue"] = cue
+    store.save(task)
+    stdb().call("save_task", task["task_id"], task["title"], json.dumps(task["steps"]))
+    if s is not None:  # the running session uses them from the next step
+        for st, cue in zip(s.task["steps"], cues):
+            st.setdefault("cue", cue)
+    await asyncio.to_thread(voice.ensure_many, cues, task_voice(task))
+    log.info("wrote cues for %s in %d ms: %s", task["task_id"], ms, cues)
 
 
 def _sess(sid: str) -> CoachSession:
@@ -268,9 +316,14 @@ def log_event(s: CoachSession, kind: str, source: str, trigger: str, conf: float
 
 def _praise(s: CoachSession, step: dict) -> list[dict]:
     """Reinforcement: a rotating "Great job!" plus what they did ("You picked up the cup!") when the step has it."""
+    lvl = s.level_of(step)
+    if lvl >= 2:
+        return []  # alerts-only / independent: no running commentary; level-ups get celebrated instead
     generic = say(PHRASES[PRAISE_KEYS[s.praise_i % len(PRAISE_KEYS)]])
     s.praise_i += 1
     specific = (step.get("praise") or "").strip()
+    if lvl == 1:
+        return [say(specific)] if specific else [generic]  # shorter at the cue level
     return [generic, say(specific)] if specific else [generic]
 
 
@@ -278,19 +331,25 @@ async def _advance(s: CoachSession, source: str, trigger: str, steps: int = 1) -
     """Move on `steps` steps (more than 1 when the live check saw the worker already further along)."""
     done_step = s.step
     finished = False
+    finished_steps = []
     for k in range(max(1, steps)):
+        finished_steps.append(s.step)
         if k:  # skipped ahead: the camera saw this step done too, so it counts (progress, reports)
             log_event(s, "done", source, trigger, 1.0, 0, "already done (seen with the step before)")
         finished = s.advance()
         if finished:
             break
+    # Fading: SpacetimeDB applies the promote/step-back rules atomically (fire and forget).
+    by_hand = source in ("button", "system")
+    for st_done in finished_steps:
+        stdb().call("record_step_outcome", s.id, s.worker_id, s.task["task_id"], int(st_done["id"]), s.outcome(st_done["id"], by_hand))
     stdb().call("set_step", s.id, s.step_index)
     praise = _praise(s, done_step)
     if finished:
         stdb().call("end_session", s.id, "done")
         return {"finished": True, "say": praise + [say(PHRASES["all_done"])], "completed_step": done_step["id"]}
     nxt = await step_payload(s)
-    nxt["say"] = praise + [say(PHRASES["next_step"])] + nxt["say"]
+    nxt["say"] = praise + ([say(PHRASES["next_step"])] if nxt["say"] else []) + nxt["say"]
     return {"finished": False, "next": nxt, "say": nxt["say"], "completed_step": done_step["id"]}
 
 
@@ -299,7 +358,7 @@ AUTO_TRIGGERS = {"stream", "pause", "left_area", "timeout", "confirm"}  # "stuck
 
 def _through(result: dict, n: int) -> int:
     """The live check sees every step: a high "done_through" means the current step (n) is done too."""
-    through = int(result.get("done_through", 0) or 0)
+    through = max(n - 1, int(result.get("done_through", 0) or 0))  # earlier steps stay done: never go back
     if result.get("status") in ("in_progress", "unclear") and through >= n and result.get("confidence", 0) >= COACH["done_confidence"]:
         result["status"] = "done"
     return through
@@ -314,81 +373,33 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
     st = s.step
     step_at_start = s.step_index  # the live stream keeps several checks in flight
     ref = store.frame(s.task["task_id"], st.get("reference_photo", "")) if st.get("reference_photo") else None
-    # Bitdeer is paused while we tune the live loop (p50 ~8 s was too slow to follow a worker).
-    # A fast VLM (Gemini Flash, or Claude Haiku) sees the whole step list instead. To switch back,
-    # restore this block and drop the live_vision call below.
-    # source = "bitdeer"
-    # t0 = time.perf_counter()
-    # try:
-    #     result, ms = await run_model(vision.check, M["bitdeer_base_url"], M["bitdeer_vision"], jpg, ref, st, s.task)
-    # except Exception as e:
-    #     log.warning("bitdeer check failed: %s", e)
-    #     result, ms, source = {"status": "unclear", "confidence": 0.0, "reason": f"Bitdeer unavailable ({type(e).__name__})"}, (time.perf_counter() - t0) * 1000, "bitdeer"
-    #     s.unclear = max(s.unclear, COACH["unclear_escalate"] - 1)  # go straight to Claude
-    # Fast model watches the stream; the stricter model (Sonnet) takes the confirming second look,
-    # so a step only advances, or gets a correction, when it agrees.
+    # One model for every live check: Claude Sonnet (models.claude_live) sees the frame + the whole step
+    # list. Bitdeer is paused (p50 ~8 s was too slow to follow a worker); to switch back, call
+    # run_model(vision.check, M["bitdeer_base_url"], M["bitdeer_vision"], jpg, ref, st, s.task) here.
     asked = trigger not in AUTO_TRIGGERS  # the worker asked ("is this right?", "I'm stuck", Check now)
-    # Steps whose success hides in small details (teach-time "close_look") get the careful model's confirm;
-    # plain steps advance on two fast looks in a row. Direct questions always get the careful model.
-    careful = bool(M.get("claude_confirm")) and bool(st.get("close_look", True))
-    confirm_look = bool(M.get("claude_confirm") and asked)
-    models = {**M, "live_vision": "claude", "claude_live": M["claude_confirm"]} if confirm_look else M
-    source = "gemini" if live_vision.provider(models["live_vision"]) == "gemini" else "haiku"
+    source, failed = live_vision.source_of(M["claude_live"]), False
     t0 = time.perf_counter()
     try:
-        result, ms, source = await run_model(live_vision.check, models, jpg, ref if M.get("live_send_ref", True) else None, st, s.task, timeout=COACH["live_timeout_s"])
+        result, ms, source = await run_model(live_vision.check, M, jpg, ref if M.get("live_send_ref", True) else None, st, s.task, timeout=COACH["live_timeout_s"])
     except Exception as e:
         log.warning("live check failed: %s", str(e)[:200])
         limited = "429" in str(e) or "RESOURCE_EXHAUSTED" in str(e) or type(e).__name__ == "RateLimitError"
-        result, ms = {"status": "unclear", "confidence": 0.0, "reason": "Rate limited, slowing down" if limited else f"Live check unavailable ({type(e).__name__})"}, (time.perf_counter() - t0) * 1000
+        result, ms, failed = {"status": "unclear", "confidence": 0.0, "reason": "Rate limited, slowing down" if limited else f"Live check unavailable ({type(e).__name__})"}, (time.perf_counter() - t0) * 1000, True
         if limited:
             return {**_stale(trigger), "status": "rate_limited", "reason": result["reason"], "latency_ms": round(ms)}
-        s.unclear = max(s.unclear, COACH["unclear_escalate"] - 1)  # go straight to Claude
     if s.step_index != step_at_start or s.finished:
         return _stale(trigger)  # another check already moved the worker on; this answer is about an old step
     n = s.step_index + 1
     through = _through(result, n)
     status = s.classify(result, COACH["low_confidence"], COACH["done_confidence"])
-    # Fast model says "done" → the careful model looks at the same frame right now (no waiting for the
-    # next frame: about 1 s faster per step). One confirm in flight per session.
-    if status == "done" and not confirm_look and careful and trigger in AUTO_TRIGGERS:
-        if s.confirm_in_flight:
-            status = "confirming"
-        else:
-            s.confirm_in_flight = True
-            try:
-                cm = {**M, "live_vision": "claude", "claude_live": M["claude_confirm"]}
-                r2, ms2, src2 = await run_model(live_vision.check, cm, jpg, ref if M.get("live_send_ref", True) else None, st, s.task, timeout=COACH["live_timeout_s"])
-            except Exception as e:
-                log.warning("confirm look failed: %s", str(e)[:200])
-                r2 = None
-            finally:
-                s.confirm_in_flight = False
-            if s.step_index != step_at_start or s.finished:
-                return _stale(trigger)
-            if r2 is None:
-                status = "confirming"
-            else:
-                result, ms, source, confirm_look = r2, ms + ms2, src2, True
-                through = _through(result, n)
-                status = s.classify(result, COACH["low_confidence"], COACH["done_confidence"])
-    escalated = False
-    # Automatic checks never wait on the slow Claude judge: unclear → stay quiet, the next frame decides.
-    # Only an explicit "is this correct?" / Check-now escalates (PLAN.md: unclear twice → Claude).
-    if status == "unclear" and trigger not in AUTO_TRIGGERS and s.note_unclear(COACH["unclear_escalate"]):
-        escalated, source = True, "claude"
-        try:
-            result, ms2 = await run_model(claude.judge, M["claude"], M["claude_effort_judge"], list(s.snapshots), ref, st, timeout=COACH["check_timeout_s"] * 2)
-            ms += ms2
-            status = s.classify(result, COACH["low_confidence"], COACH["done_confidence"])
-        except Exception as e:
-            log.warning("claude judge failed: %s", e)
-            result = {"status": "unclear", "confidence": 0.0, "reason": f"Models unavailable ({type(e).__name__})"}
-            status = "unavailable"
-        s.unclear = 0
-    # Debounce "done" (AGENTS.md §6): advance only on the 2nd consecutive done, >= 1 s apart.
-    if status == "done" and (asked or confirm_look):
-        s.done_through = through  # the careful model agreed (or the worker asked): move on
+    if failed and asked:
+        status = "unavailable"
+    escalated = False  # no Claude judge on the live path: unclear → quiet (auto) or "not sure" (asked)
+    # Debounce "done" (AGENTS.md §6): automatic checks advance on 2 dones in a row, >= done_min_gap_s apart.
+    if status == "done" and asked:
+        s.done_through = through  # the worker asked: one look is enough
+    elif status == "done" and result.get("confidence", 0) >= COACH["done_sure"]:
+        s.done_through = through  # one sure look is enough (speed); less sure answers wait for a second look
     elif status == "done":
         # how far to jump: the smaller of the two confirming looks, never less than this step
         s.done_through = min(s.done_through, through) if s.done_streak else through
@@ -404,8 +415,7 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
     say_it = "speak"
     if status == "mistake":
         if trigger in AUTO_TRIGGERS:
-            # the confirm model's mistake is already a second opinion (the fast model thought it was done)
-            need = 1 if confirm_look else CFG["thresholds"]["correct_wrong_count"]
+            need = CFG["thresholds"]["correct_wrong_count"] + (1 if s.level_of() >= 3 else 0)
             say_it = s.note_mistake(time.monotonic(), need, CFG["thresholds"]["correction_cooldown_s"])
         if say_it == "wait":
             status = "in_progress"  # one look is not enough to correct someone
@@ -425,6 +435,7 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
         fix = (result.get("fix") or "").strip()
         correction = (fix if fix.lower().startswith("almost") else f"Almost. {fix}") if fix else st["correction"]
         out["say"] = [say(correction)]
+        s.flag("corrections")
         meta = {"kind": "mistake", "task_id": s.task["task_id"], "task": s.task["title"], "step_id": st["id"], "tip": correction}
         text = f"{s.worker_name} had trouble with \"{st['instruction']}\" while doing {s.task['title']}: {result.get('reason') or st['common_mistake']}"
         asyncio.create_task(_safe(memory.add(s.worker_id, text, meta)))
@@ -432,14 +443,18 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
         # demo never freezes: an explicit "done" moves on when the models can't answer
         out.update(await _advance(s, "system", trigger))
         out["status"] = "skipped"
-    elif escalated and status == "unclear":
+    elif asked and status == "unclear":
         out["say"] = [say(PHRASES["not_sure"])]
     elif status in ("in_progress", "unclear") and trigger in AUTO_TRIGGERS and time.monotonic() - s.last_correction_at > 8:
         # stuck on this step for a while: gentle, escalating guidance (each level once per step;
         # not right after a correction, which already told them what to do)
-        level = s.stuck_due(time.monotonic(), COACH["stuck_after_s"])
+        lvl = s.level_of()
+        scale = COACH["stuck_scale_by_level"][min(lvl, 3)]
+        level = s.stuck_due(time.monotonic(), [x * scale for x in COACH["stuck_after_s"]])
         hint = say(out["hint"]) if out["hint"] else say(st["instruction"])
-        if level == 0:
+        if level is not None and lvl >= 3:
+            out["say"] = [say(PHRASES["offer_help"])]  # independent: only ever offer a person
+        elif level == 0:
             out["say"] = [say(PHRASES["take_your_time"]), hint]
         elif level == 1:
             out["say"] = [hint, say(PHRASES["ask_anytime"])]
@@ -447,7 +462,10 @@ async def run_check(s: CoachSession, jpg: bytes, trigger: str) -> dict:
             out["say"] = [say(PHRASES["offer_help"])]
         if level is not None:
             out["coach"] = "stuck"
+            s.flag("hinted")
     s.note_spoken([x["text"] for x in out["say"]])
+    if status in ("mistake", "done", "in_progress", "confirming") and out["reason"]:
+        s.last_seen = f"step {n}, {status.replace('_', ' ')}: {out['reason']}" + (f" Fix shown: {out['fix']}" if out.get("fix") else "")
     return out
 
 
@@ -529,6 +547,7 @@ async def coach_help(sid: str, req: HelpReq) -> dict:
     photo = save_photo("help", s.id, b64jpg(req.image)) if req.image else ""
     stdb().call("request_help", s.id, s.worker_id, s.task["task_id"], s.step["id"], photo)
     log_event(s, "help", "button", "button", 1.0, 0, "help requested", photo)
+    s.flag("help")
     return {"say": [say(PHRASES["help"])], "photo": photo}
 
 
@@ -575,6 +594,7 @@ async def coach_talk(sid: str, audio: UploadFile = File(...), image: str = Form(
     elif intent == "stuck":
         # look first: a visible mistake gets its correction, otherwise the next small action
         if image:
+            s.flag("hinted")
             res = await run_check(s, b64jpg(image), "stuck")
             out["check"] = res
             items = res.get("say") or [say(res.get("hint") or st["instruction"])]
@@ -598,7 +618,7 @@ async def coach_talk(sid: str, audio: UploadFile = File(...), image: str = Form(
         except Exception as e:
             log.warning("answer: memory unavailable: %s", e)
         try:
-            text, _ = await run_model(claude.answer, M["claude_answer"], M["claude_effort_answer"], said, frame, s.task["title"], st, s.step_index + 1, len(s.steps), notes, timeout=15)
+            text, _ = await run_model(claude.answer, M["claude_answer"], M["claude_effort_answer"], said, frame, s.task["title"], st, s.step_index + 1, len(s.steps), notes, list(s.talk_log), s.last_seen, timeout=15)
         except Exception as e:
             text = "I'm not sure. Press help if you need a person."
             log.warning("claude answer failed: %s", e)
@@ -606,9 +626,122 @@ async def coach_talk(sid: str, audio: UploadFile = File(...), image: str = Form(
             return {**out, "intent": "not_for_coach", "answer": "", "say": [], "answered_by": "none", "latency_ms": round((time.perf_counter() - t0) * 1000)}
         out.update(answer=text, answered_by="claude+moss" if notes else "claude", say=[say(text)])
     s.note_spoken([x["text"] for x in out.get("say", [])])
+    if out.get("answer"):
+        s.talk_log.append((said, out["answer"]))
     out["latency_ms"] = round((time.perf_counter() - t0) * 1000)
     stdb().call("log_talk", s.id, s.worker_id, said[:300], intent, out["answer"][:300], out["answered_by"], int(out["latency_ms"]))
     return out
+
+
+# ---------- voice agent (Cartesia Managed Agent) ----------
+# Cartesia runs the conversation; its client tools arrive on the worker screen's WebSocket, and the screen
+# runs them here. Results are short plain text for the agent; "ui" tells the screen what changed.
+@router.post("/coach/{sid}/agent")
+async def coach_agent(sid: str) -> dict:
+    s = _sess(sid)
+    vid = task_voice(s.task)
+    coach_name = ((s.task.get("voice") or {}).get("name") if vid else "") or "your coach"
+    try:
+        voice_id = vid or await asyncio.to_thread(voice.voice_id)
+        agent_id = await asyncio.to_thread(agent.ensure, voice_id, coach_name)
+        token = await asyncio.to_thread(agent.token)
+    except Exception as e:
+        log.warning("voice agent unavailable: %s", str(e)[:200])
+        raise HTTPException(503, f"voice agent unavailable: {type(e).__name__}")
+    return {
+        "agent_id": agent_id,
+        "url": AGENT_WS.format(agent_id=agent_id),
+        "token": token,  # agent grant only, expires in minutes; the API key stays here
+        "voice": {"id": voice_id, "name": coach_name, "cloned": bool(vid)},
+    }
+
+
+class AgentToolReq(BaseModel):
+    tool: str
+    parameters: dict = {}
+    image: str = ""  # face-blurred frame, for check_my_work / call_a_helper
+
+
+def _step_line(s: CoachSession) -> str:
+    return f"Step {s.step_index + 1} of {len(s.steps)}: {s.step['instruction']}"
+
+
+def _check_text(s: CoachSession, res: dict) -> str:
+    st = res.get("status")
+    if res.get("finished"):
+        return "Done! That was the last step. The whole task is finished."
+    if res.get("next"):
+        return f"Done! The step is finished. Now {_step_line(s)}"
+    if st == "mistake":
+        return f"Almost. The camera sees: {res.get('reason') or 'something to fix'}. What to do: {res.get('fix') or s.step['correction']}"
+    if st in ("in_progress", "confirming"):
+        return "Not done yet." + (f" Next small action: {res['hint']}" if res.get("hint") else f" The step is: {s.step['instruction']}")
+    if st in ("stale", "rate_limited"):
+        return "The step just changed. Call what_is_my_step."
+    return "The camera could not tell. Ask them to hold the work in front of the glasses and keep still, then check again."
+
+
+@router.post("/coach/{sid}/agent/tool")
+async def coach_agent_tool(sid: str, req: AgentToolReq) -> dict:
+    s = _sess(sid)
+    t0 = time.perf_counter()
+    p = req.parameters or {}
+    ui: dict = {}
+    ok = True
+    if s.finished and req.tool not in ("my_progress", "remember"):
+        text = "The task is finished. Every step is done."
+    elif req.tool == "what_is_my_step":
+        fresh = await _levels(s)
+        if fresh is not None:
+            s.levels = fresh
+        st, lvl = s.step, s.level_of()
+        coach = ((s.task.get("voice") or {}).get("name") if task_voice(s.task) else "") or "their job coach"
+        steps = " ".join(f"{k + 1}. {x['instruction']}" for k, x in enumerate(s.steps))
+        text = f"Worker: {s.worker_name}. You speak as {coach}. Task: {s.task['title']}. All steps: {steps} Now: {_step_line(s)} Why: {st['why']} Done looks like: {st['done_right']} Common slip: {st['common_mistake']} Help level: {progress.LEVEL_NAMES[lvl]}."
+        if lvl >= 2:
+            text += " They know this step well: keep it very short."
+        try:
+            mems, _ = await memory.recall(s.worker_id, f"{st['instruction']}. {st['common_mistake']}")
+            tip = next((m["tip"] for m in mems if m.get("kind") == "mistake" and m.get("tip")), "")
+            if tip:
+                text += f" Last time this helped: {tip}"
+        except Exception as e:
+            log.info("agent step: memory unavailable: %s", e)
+    elif req.tool == "check_my_work":
+        if not req.image:
+            text, ok = "The camera is off. Ask them to turn it on.", False
+        else:
+            res = await run_check(s, b64jpg(req.image), "voice")
+            text, ui = _check_text(s, res), {"check": res}
+    elif req.tool == "call_a_helper":
+        await coach_help(sid, HelpReq(image=req.image or None))
+        text, ui = "Help alert sent to a coworker's phone, with a photo. If nobody answers in 20 seconds, the supervisor gets it.", {"help": True}
+    elif req.tool == "my_progress":
+        fresh = await _levels(s)
+        if fresh is not None:
+            s.levels = fresh
+        lines = [f"Step {k + 1} ({st['instruction']}): {progress.LEVEL_NAMES[s.level_of(st)]}" for k, st in enumerate(s.steps)]
+        done = len(s.steps) if s.finished else s.step_index
+        text = f"Today: {done} of {len(s.steps)} steps done so far. Help needed per step, from the coach's records: " + "; ".join(lines) + "."
+    elif req.tool == "change_step":
+        if p.get("direction") == "back":
+            if s.step_index == 0:
+                text = f"They are already on step 1: {s.step['instruction']}"
+            else:
+                r = await coach_goto(sid, GotoReq(index=s.step_index - 1))
+                text, ui = f"Moved back. Now {_step_line(s)}", {"goto": r["index"]}
+        else:
+            r = await coach_next(sid, NextReq(reason="voice"))
+            text = "That was the last step. The task is finished." if r.get("finished") else f"Moved on. Now {_step_line(s)}"
+            ui = {"check": {**r, "status": "skipped"}}
+    elif req.tool == "remember":
+        note = " ".join(str(p.get("note", "")).split())[:300]
+        if note:
+            asyncio.create_task(_safe(memory.add(s.worker_id, f"{s.worker_name} said: {note}", {"kind": "preference", "task": s.task["title"], "by": "voice agent"})))
+        text = "Saved for the coach."
+    else:
+        text, ok = f"Unknown tool {req.tool}.", False
+    return {"result": text, "ok": ok, "ui": ui, "latency_ms": round((time.perf_counter() - t0) * 1000)}
 
 
 @router.get("/coach/{sid}/progress")
@@ -630,6 +763,13 @@ async def coach_progress(sid: str) -> dict:
         raise HTTPException(503, f"SpacetimeDB unavailable: {type(e).__name__}")
     titles = {r["task_id"]: (store.get(r["task_id"]) or {}).get("title", r["task_id"]) for r in rows_s}
     nums = progress.session_numbers(sid, rows_s, rows_e, titles, len(s.steps))
+    try:  # fading: steps that moved toward independence in this session
+        rows_o = await asyncio.to_thread(db.sql, f"SELECT step_id, level_before, level_after, reason FROM step_outcome WHERE session_id = '{sid.replace(chr(39), '')}'")
+        step_text = {int(x["id"]): x["instruction"] for x in s.steps}
+        if nums:
+            nums["level_ups"] = [{"step": step_text.get(int(o["step_id"]), ""), "now": progress.LEVEL_NAMES[int(o["level_after"])]} for o in rows_o if o["reason"] == "promote"]
+    except Exception as e:
+        log.warning("progress: level history unavailable: %s", e)
     notes: list[str] = []
     try:
         mems, _ = await memory.recall(s.worker_id, f"{s.task['title']}: what was hard, mistakes, progress")
@@ -650,6 +790,12 @@ async def coach_progress(sid: str) -> dict:
         note = f"{s.worker_name} did {nums['task']}: {nums['by_self']} of {nums['total_steps']} steps without help, {nums['corrections']} corrections" + (f", {nums['minutes']} min" if nums.get("minutes") else "") + "."
         asyncio.create_task(_safe(memory.add(s.worker_id, note, {"kind": "progress", "task": nums["task"]})))
     return {"text": text, "say": [say(text)], "numbers": nums, "memory": notes, "worded_by": words_by, "latency_ms": round((time.perf_counter() - t0) * 1000)}
+
+
+@router.get("/worker-id")
+def worker_id(name: str) -> dict:
+    """The id a worker's name maps to (same rule the coach uses), so a worker's screen can register for its own rows."""
+    return {"worker_id": slug(name)}
 
 
 # ---------- memory ----------
@@ -806,13 +952,13 @@ async def run_video_job(job: vid.Job, path: Path, mime: str, delete_after: bool,
             steps = []
             for i, s in enumerate(t["steps"]):
                 ref = max(0, min(int(s.pop("reference_frame", 0)), len(urls) - 1))
-                steps.append({"id": i + 1, **{k2: str(s.get(k2, "")) for k2 in ("instruction", "done_right", "common_mistake", "correction", "why", "praise")}, "reference_photo": urls[ref], "start_s": float(s["start_s"]), "end_s": float(s["end_s"]), "close_look": bool(s.get("close_look", True))})
+                steps.append({"id": i + 1, **{k2: str(s.get(k2, "")) for k2 in ("instruction", "done_right", "common_mistake", "correction", "why", "praise", "cue")}, "reference_photo": urls[ref], "start_s": float(s["start_s"]), "end_s": float(s["end_s"]), "close_look": bool(s.get("close_look", True))})
             task = {"task_id": task_id, "title": t["title"], "summary": t.get("summary", ""), "steps": steps, "frames": urls, "saved": True, "source": {"kind": "video", "video_id": job.video_id, "name": job.name}, "voice": voice_rec}
             store.save(task)
             stdb().call("save_task", task_id, task["title"], json.dumps(steps))
             tasks.append(task)
         job.to("recording_voice")
-        texts = [x for t in tasks for s in t["steps"] for x in (s["instruction"], s["correction"], s["why"], s.get("praise", "")) if x]
+        texts = [x for t in tasks for s in t["steps"] for x in (s["instruction"], s["correction"], s["why"], s.get("praise", ""), s.get("cue", "")) if x]
         if voice_rec:
             texts += list(PHRASES.values())  # praise, "Next step.", help… in the supervisor's voice too
         try:

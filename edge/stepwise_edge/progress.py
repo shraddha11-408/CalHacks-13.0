@@ -61,6 +61,9 @@ def session_numbers(sid: str, sessions: list[dict], events: list[dict], titles: 
     }
 
 
+LEVEL_NAMES = ["full instructions", "a short reminder", "help only if something needs fixing", "doing it on your own"]
+
+
 def template(name: str, n: dict) -> str:
     """Facts only, no model: used when Claude is unavailable."""
     if not n:
@@ -70,6 +73,8 @@ def template(name: str, n: dict) -> str:
         parts.append(f"You did {n['by_self']} step{'s' if n['by_self'] != 1 else ''} by yourself today!")
     elif n["steps_done"]:
         parts.append(f"You did {n['steps_done']} step{'s' if n['steps_done'] != 1 else ''} today!")
+    if n.get("level_ups"):
+        parts.append("You know a step so well that I can say less now!")
     last = n.get("last_time")
     if last and n["corrections"] < last["corrections"]:
         parts.append("You needed fewer reminders than last time.")
@@ -84,6 +89,8 @@ a capable adult with an intellectual or developmental disability. Write what the
 2 or 3 short sentences, under 35 words in total. First-grade reading level. One idea per sentence.
 Start with the best true number, like "You did 3 steps by yourself today!".
 If there is a "last_time", say one honest, positive thing about the change (fewer reminders, faster, finished).
+If "level_ups" is not empty, celebrate it: the worker needs less help on that step now (say which step,
+in a few plain words). This is the biggest win of the day.
 You may use one memory note to name something that used to be hard and went better today, but only if today's
 numbers show it. Never invent a number, a step or an event. Never say "wrong", "no", "failed" or "bad".
 If today was harder, stay warm: name what they did do and say they are learning. Plain text only."""

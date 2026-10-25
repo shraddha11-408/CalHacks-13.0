@@ -5,6 +5,7 @@ import { StdbGate } from '../components/Stdb'
 import { apiUrl } from '../lib/audio'
 import { reducers, tables } from '../module_bindings'
 import { RaceLog } from '../components/RaceLog'
+import { useRegisterDevice } from '../lib/device'
 import { doubleClaims } from '../lib/claims'
 
 const NAME_KEY = 'idd-buddy-name'
@@ -52,6 +53,7 @@ export function BuddyPage() {
 }
 
 function BuddyAlerts({ name, error, onChangeName }: { name: string; error: string | null; onChangeName: () => void }) {
+  useRegisterDevice('buddy', name)
   const [help] = useTable(tables.helpRequest)
   const [attempts] = useTable(tables.claimAttempt)
   const [workers] = useTable(tables.worker)

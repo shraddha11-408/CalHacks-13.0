@@ -33,12 +33,26 @@ if [ "$TARGET" != "maincloud" ]; then
     || echo "spacetimedb: publish failed (see: cd spacetime && spacetime publish stepwise --server local)" >&2
 fi
 
+# Self-signed cert for the web server (once): camera and mic need https on a LAN address.
+CERT_DIR="$ROOT/web/.cert"
+LAN_IPS=$( { ipconfig getifaddr en0; ipconfig getifaddr en1; } 2>/dev/null || true)
+if [ ! -f "$CERT_DIR/key.pem" ] || [ ! -f "$CERT_DIR/cert.pem" ]; then
+  mkdir -p "$CERT_DIR"
+  SAN="DNS:localhost,IP:127.0.0.1"
+  for ip in $LAN_IPS; do SAN="$SAN,IP:$ip"; done
+  openssl req -x509 -newkey rsa:2048 -nodes -keyout "$CERT_DIR/key.pem" -out "$CERT_DIR/cert.pem" \
+    -days 825 -subj /CN=localhost -addext "subjectAltName=$SAN" >/dev/null 2>&1 \
+    && echo "web: made a self-signed cert for $SAN" \
+    || echo "web: openssl failed, serving plain http" >&2
+fi
+
 (cd "$ROOT/edge" && exec "$ROOT/.venv/bin/uvicorn" stepwise_edge.main:app --host 127.0.0.1 --port 8000 --reload) &
 pids+=($!)
-# WEB_HOST=0.0.0.0 ./run.sh  → buddy phones on the same network can open http://<laptop-ip>:5173/buddy
+# WEB_HOST=0.0.0.0 ./run.sh  → buddy phones on the same network can open https://<laptop-ip>:5173/buddy
 # (the web server also proxies SpacetimeDB and the edge API, so phones need only this one address)
 (cd "$ROOT/web" && exec npm run dev -- --host "${WEB_HOST:-127.0.0.1}" --port 5173 --strictPort) &
 pids+=($!)
 
-echo "edge: http://localhost:8000/health   web: http://localhost:5173"
+echo "edge: http://localhost:8000/health   web: https://localhost:5173"
+for ip in $LAN_IPS; do echo "web (network): https://$ip:5173  (accept the certificate warning once)"; done
 wait

@@ -10,6 +10,66 @@ import {
   type Infer as __Infer,
 } from "spacetimedb";
 
+export const AgentCall = __t.object("AgentCall", {
+  callId: __t.string(),
+  owner: __t.identity(),
+  workerId: __t.string(),
+  sessionId: __t.string(),
+  taskId: __t.string(),
+  agentVersion: __t.string(),
+  voice: __t.string(),
+  status: __t.string(),
+  endReason: __t.string(),
+  turns: __t.u32(),
+  toolCalls: __t.u32(),
+  startedAt: __t.timestamp(),
+  endedAt: __t.option(__t.timestamp()),
+});
+export type AgentCall = __Infer<typeof AgentCall>;
+
+export const AgentStats = __t.object("AgentStats", {
+  workerId: __t.string(),
+  calls: __t.u32(),
+  live: __t.u32(),
+  turns: __t.u32(),
+  toolCalls: __t.u32(),
+  checks: __t.u32(),
+  helpAlerts: __t.u32(),
+  bargeIns: __t.u32(),
+  p50ResponseMs: __t.u32(),
+  p90ResponseMs: __t.u32(),
+  p50ToolMs: __t.u32(),
+  updatedAt: __t.timestamp(),
+});
+export type AgentStats = __Infer<typeof AgentStats>;
+
+export const AgentToolCall = __t.object("AgentToolCall", {
+  id: __t.u64(),
+  callId: __t.string(),
+  workerId: __t.string(),
+  toolCallId: __t.string(),
+  tool: __t.string(),
+  argsJson: __t.string(),
+  result: __t.string(),
+  ok: __t.bool(),
+  latencyMs: __t.u32(),
+  ts: __t.timestamp(),
+});
+export type AgentToolCall = __Infer<typeof AgentToolCall>;
+
+export const AgentTurn = __t.object("AgentTurn", {
+  id: __t.u64(),
+  callId: __t.string(),
+  workerId: __t.string(),
+  turn: __t.u32(),
+  role: __t.string(),
+  text: __t.string(),
+  interrupted: __t.bool(),
+  responseMs: __t.u32(),
+  ts: __t.timestamp(),
+});
+export type AgentTurn = __Infer<typeof AgentTurn>;
+
 export const ClaimAttempt = __t.object("ClaimAttempt", {
   id: __t.u64(),
   helpId: __t.u64(),
@@ -19,6 +79,23 @@ export const ClaimAttempt = __t.object("ClaimAttempt", {
   ts: __t.timestamp(),
 });
 export type ClaimAttempt = __Infer<typeof ClaimAttempt>;
+
+export const Device = __t.object("Device", {
+  identity: __t.identity(),
+  role: __t.string(),
+  name: __t.string(),
+  workerId: __t.string(),
+  online: __t.bool(),
+  lastSeen: __t.timestamp(),
+});
+export type Device = __Infer<typeof Device>;
+
+export const HelpEscalationTimer = __t.object("HelpEscalationTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+  helpId: __t.u64(),
+});
+export type HelpEscalationTimer = __Infer<typeof HelpEscalationTimer>;
 
 export const HelpRequest = __t.object("HelpRequest", {
   id: __t.u64(),
@@ -34,6 +111,52 @@ export const HelpRequest = __t.object("HelpRequest", {
   resolvedAt: __t.option(__t.timestamp()),
 });
 export type HelpRequest = __Infer<typeof HelpRequest>;
+
+export const HelpRoute = __t.object("HelpRoute", {
+  helpId: __t.u64(),
+  routedTo: __t.string(),
+  escalatedAt: __t.option(__t.timestamp()),
+});
+export type HelpRoute = __Infer<typeof HelpRoute>;
+
+export const LevelChange = __t.object("LevelChange", {
+  workerId: __t.string(),
+  taskId: __t.string(),
+  stepId: __t.u32(),
+  fromLevel: __t.u8(),
+  toLevel: __t.u8(),
+  reason: __t.string(),
+  by: __t.string(),
+});
+export type LevelChange = __Infer<typeof LevelChange>;
+
+export const Mastery = __t.object("Mastery", {
+  key: __t.string(),
+  workerId: __t.string(),
+  taskId: __t.string(),
+  stepId: __t.u32(),
+  level: __t.u8(),
+  streak: __t.u32(),
+  recent: __t.string(),
+  attempts: __t.u32(),
+  updatedAt: __t.timestamp(),
+});
+export type Mastery = __Infer<typeof Mastery>;
+
+export const MyMastery = __t.object("MyMastery", {});
+export type MyMastery = __Infer<typeof MyMastery>;
+
+export const PresenceTimer = __t.object("PresenceTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type PresenceTimer = __Infer<typeof PresenceTimer>;
+
+export const RollupTimer = __t.object("RollupTimer", {
+  scheduledId: __t.u64(),
+  scheduledAt: __t.scheduleAt(),
+});
+export type RollupTimer = __Infer<typeof RollupTimer>;
 
 export const Session = __t.object("Session", {
   id: __t.string(),
@@ -63,6 +186,27 @@ export const StepEvent = __t.object("StepEvent", {
 });
 export type StepEvent = __Infer<typeof StepEvent>;
 
+export const StepOutcome = __t.object("StepOutcome", {
+  id: __t.u64(),
+  sessionId: __t.string(),
+  workerId: __t.string(),
+  taskId: __t.string(),
+  stepId: __t.u32(),
+  outcome: __t.string(),
+  levelBefore: __t.u8(),
+  levelAfter: __t.u8(),
+  reason: __t.string(),
+  by: __t.string(),
+  ts: __t.timestamp(),
+});
+export type StepOutcome = __Infer<typeof StepOutcome>;
+
+export const SupervisorToolCalls = __t.object("SupervisorToolCalls", {});
+export type SupervisorToolCalls = __Infer<typeof SupervisorToolCalls>;
+
+export const SupervisorTranscript = __t.object("SupervisorTranscript", {});
+export type SupervisorTranscript = __Infer<typeof SupervisorTranscript>;
+
 export const TalkEvent = __t.object("TalkEvent", {
   id: __t.u64(),
   sessionId: __t.string(),
@@ -90,4 +234,17 @@ export const Worker = __t.object("Worker", {
   createdAt: __t.timestamp(),
 });
 export type Worker = __Infer<typeof Worker>;
+
+export const WorkerProgress = __t.object("WorkerProgress", {
+  workerId: __t.string(),
+  stepsTracked: __t.u32(),
+  atFull: __t.u32(),
+  atCue: __t.u32(),
+  atAlerts: __t.u32(),
+  independent: __t.u32(),
+  promotions7D: __t.u32(),
+  cleanLast24H: __t.u32(),
+  updatedAt: __t.timestamp(),
+});
+export type WorkerProgress = __Infer<typeof WorkerProgress>;
 

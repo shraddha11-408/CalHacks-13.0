@@ -102,3 +102,15 @@ def test_echo_guard_ignores_the_apps_own_voice():
     assert s.is_echo("great job", now=101.0)
     assert not s.is_echo("is this the right cup?", now=105.0)
     assert not s.is_echo("pick up the paper coffee cup with the lid", now=200.0)  # long ago: the worker repeating it
+
+
+def test_step_outcome_for_fading():
+    s = CoachSession("w", "W", TASK)
+    assert s.outcome(1) == "clean"
+    s.flag("hinted")
+    assert s.outcome(1) == "assisted"
+    s.flag("corrections")
+    assert s.outcome(1) == "error"  # a correction outweighs a hint
+    assert s.outcome(2, by_hand=True) == "assisted"
+    s.levels = {2: 3}
+    assert s.level_of() == 0 and s.level_of(TASK["steps"][1]) == 3

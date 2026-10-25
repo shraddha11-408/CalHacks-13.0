@@ -34,33 +34,82 @@ import {
 } from "spacetimedb";
 
 // Import all reducer arg schemas
+import AgentCallEndReducer from "./agent_call_end_reducer";
+import AgentCallStartReducer from "./agent_call_start_reducer";
+import AgentToolLogReducer from "./agent_tool_log_reducer";
+import AgentTurnLogReducer from "./agent_turn_log_reducer";
 import ClaimHelpReducer from "./claim_help_reducer";
+import CoachEndCallReducer from "./coach_end_call_reducer";
 import DeleteTaskReducer from "./delete_task_reducer";
 import EndSessionReducer from "./end_session_reducer";
+import EnsureSchedulesReducer from "./ensure_schedules_reducer";
+import HeartbeatReducer from "./heartbeat_reducer";
 import LogStepEventReducer from "./log_step_event_reducer";
 import LogTalkReducer from "./log_talk_reducer";
+import RecordStepOutcomeReducer from "./record_step_outcome_reducer";
+import RegisterDeviceReducer from "./register_device_reducer";
 import RequestHelpReducer from "./request_help_reducer";
 import ResolveHelpReducer from "./resolve_help_reducer";
 import SaveTaskReducer from "./save_task_reducer";
 import SetStepReducer from "./set_step_reducer";
+import SetSupportLevelReducer from "./set_support_level_reducer";
 import StartSessionReducer from "./start_session_reducer";
 import UpsertWorkerReducer from "./upsert_worker_reducer";
 
 // Import all procedure arg schemas
 
 // Import all table schema definitions
+import AgentCallRow from "./agent_call_table";
+import AgentStatsRow from "./agent_stats_table";
 import ClaimAttemptRow from "./claim_attempt_table";
+import DeviceRow from "./device_table";
 import HelpRequestRow from "./help_request_table";
+import HelpRouteRow from "./help_route_table";
+import LevelChangeRow from "./level_change_table";
+import MasteryRow from "./mastery_table";
+import MyMasteryRow from "./my_mastery_table";
 import SessionRow from "./session_table";
 import StepEventRow from "./step_event_table";
+import StepOutcomeRow from "./step_outcome_table";
+import SupervisorToolCallsRow from "./supervisor_tool_calls_table";
+import SupervisorTranscriptRow from "./supervisor_transcript_table";
 import TalkEventRow from "./talk_event_table";
 import TaskRow from "./task_table";
 import WorkerRow from "./worker_table";
+import WorkerProgressRow from "./worker_progress_table";
 
 /** Type-only namespace exports for generated type groups. */
 
 /** The schema information for all tables in this module. This is defined the same was as the tables would have been defined in the server. */
 const tablesSchema = __schema({
+  agentCall: __table({
+    name: 'agent_call',
+    indexes: [
+      { accessor: 'callId', name: 'agent_call_call_id_idx_btree', algorithm: 'btree', columns: [
+        'callId',
+      ] },
+      { accessor: 'owner', name: 'agent_call_owner_idx_btree', algorithm: 'btree', columns: [
+        'owner',
+      ] },
+      { accessor: 'workerId', name: 'agent_call_worker_id_idx_btree', algorithm: 'btree', columns: [
+        'workerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'agent_call_call_id_key', constraint: 'unique', columns: ['callId'] },
+    ],
+  }, AgentCallRow),
+  agentStats: __table({
+    name: 'agent_stats',
+    indexes: [
+      { accessor: 'workerId', name: 'agent_stats_worker_id_idx_btree', algorithm: 'btree', columns: [
+        'workerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'agent_stats_worker_id_key', constraint: 'unique', columns: ['workerId'] },
+    ],
+  }, AgentStatsRow),
   claimAttempt: __table({
     name: 'claim_attempt',
     indexes: [
@@ -75,6 +124,17 @@ const tablesSchema = __schema({
       { name: 'claim_attempt_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, ClaimAttemptRow),
+  device: __table({
+    name: 'device',
+    indexes: [
+      { accessor: 'identity', name: 'device_identity_idx_btree', algorithm: 'btree', columns: [
+        'identity',
+      ] },
+    ],
+    constraints: [
+      { name: 'device_identity_key', constraint: 'unique', columns: ['identity'] },
+    ],
+  }, DeviceRow),
   helpRequest: __table({
     name: 'help_request',
     indexes: [
@@ -89,6 +149,39 @@ const tablesSchema = __schema({
       { name: 'help_request_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, HelpRequestRow),
+  helpRoute: __table({
+    name: 'help_route',
+    indexes: [
+      { accessor: 'helpId', name: 'help_route_help_id_idx_btree', algorithm: 'btree', columns: [
+        'helpId',
+      ] },
+    ],
+    constraints: [
+      { name: 'help_route_help_id_key', constraint: 'unique', columns: ['helpId'] },
+    ],
+  }, HelpRouteRow),
+  levelChange: __table({
+    name: 'level_change',
+    indexes: [
+    ],
+    constraints: [
+    ],
+    event: true,
+  }, LevelChangeRow),
+  mastery: __table({
+    name: 'mastery',
+    indexes: [
+      { accessor: 'key', name: 'mastery_key_idx_btree', algorithm: 'btree', columns: [
+        'key',
+      ] },
+      { accessor: 'workerId', name: 'mastery_worker_id_idx_btree', algorithm: 'btree', columns: [
+        'workerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'mastery_key_key', constraint: 'unique', columns: ['key'] },
+    ],
+  }, MasteryRow),
   session: __table({
     name: 'session',
     indexes: [
@@ -120,6 +213,23 @@ const tablesSchema = __schema({
       { name: 'step_event_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, StepEventRow),
+  stepOutcome: __table({
+    name: 'step_outcome',
+    indexes: [
+      { accessor: 'id', name: 'step_outcome_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+      { accessor: 'sessionId', name: 'step_outcome_session_id_idx_btree', algorithm: 'btree', columns: [
+        'sessionId',
+      ] },
+      { accessor: 'workerId', name: 'step_outcome_worker_id_idx_btree', algorithm: 'btree', columns: [
+        'workerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'step_outcome_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, StepOutcomeRow),
   talkEvent: __table({
     name: 'talk_event',
     indexes: [
@@ -153,19 +263,61 @@ const tablesSchema = __schema({
       { name: 'worker_id_key', constraint: 'unique', columns: ['id'] },
     ],
   }, WorkerRow),
+  workerProgress: __table({
+    name: 'worker_progress',
+    indexes: [
+      { accessor: 'workerId', name: 'worker_progress_worker_id_idx_btree', algorithm: 'btree', columns: [
+        'workerId',
+      ] },
+    ],
+    constraints: [
+      { name: 'worker_progress_worker_id_key', constraint: 'unique', columns: ['workerId'] },
+    ],
+  }, WorkerProgressRow),
+  myMastery: __table({
+    name: 'my_mastery',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, MyMasteryRow),
+  supervisorToolCalls: __table({
+    name: 'supervisor_tool_calls',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SupervisorToolCallsRow),
+  supervisorTranscript: __table({
+    name: 'supervisor_transcript',
+    indexes: [
+    ],
+    constraints: [
+    ],
+  }, SupervisorTranscriptRow),
 });
 
 /** The schema information for all reducers in this module. This is defined the same way as the reducers would have been defined in the server, except the body of the reducer is omitted in code generation. */
 const reducersSchema = __reducers(
+  __reducerSchema("agent_call_end", AgentCallEndReducer),
+  __reducerSchema("agent_call_start", AgentCallStartReducer),
+  __reducerSchema("agent_tool_log", AgentToolLogReducer),
+  __reducerSchema("agent_turn_log", AgentTurnLogReducer),
   __reducerSchema("claim_help", ClaimHelpReducer),
+  __reducerSchema("coach_end_call", CoachEndCallReducer),
   __reducerSchema("delete_task", DeleteTaskReducer),
   __reducerSchema("end_session", EndSessionReducer),
+  __reducerSchema("ensure_schedules", EnsureSchedulesReducer),
+  __reducerSchema("heartbeat", HeartbeatReducer),
   __reducerSchema("log_step_event", LogStepEventReducer),
   __reducerSchema("log_talk", LogTalkReducer),
+  __reducerSchema("record_step_outcome", RecordStepOutcomeReducer),
+  __reducerSchema("register_device", RegisterDeviceReducer),
   __reducerSchema("request_help", RequestHelpReducer),
   __reducerSchema("resolve_help", ResolveHelpReducer),
   __reducerSchema("save_task", SaveTaskReducer),
   __reducerSchema("set_step", SetStepReducer),
+  __reducerSchema("set_support_level", SetSupportLevelReducer),
   __reducerSchema("start_session", StartSessionReducer),
   __reducerSchema("upsert_worker", UpsertWorkerReducer),
 );
