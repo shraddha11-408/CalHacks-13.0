@@ -179,6 +179,19 @@ const helpRoute = table(
   }
 );
 
+// Wristband calls: a worker pressed the wristband. The help request goes straight to the supervisor
+// (no buddy stage); this row lets the supervisor screen ring until someone answers.
+const wristCall = table(
+  { name: 'wrist_call', public: true },
+  {
+    id: t.u64().primaryKey().autoInc(),
+    helpId: t.u64().index('btree'),
+    workerId: t.string(),
+    createdAt: t.timestamp(),
+    answeredAt: t.option(t.timestamp()),
+  }
+);
+
 const helpEscalationTimer = table(
   { name: 'help_escalation_timer' }, // private: only the module sees its own timers
   {
@@ -289,7 +302,7 @@ const agentStats = table(
 
 const spacetimedb = schema({
   worker, task, session, stepEvent, helpRequest, talkEvent, claimAttempt,
-  device, mastery, stepOutcome, levelChange, helpRoute, helpEscalationTimer, workerProgress, rollupTimer, presenceTimer,
+  device, mastery, stepOutcome, levelChange, helpRoute, wristCall, helpEscalationTimer, workerProgress, rollupTimer, presenceTimer,
   agentCall, agentTurn, agentToolCall, agentStats,
 });
 export default spacetimedb;
@@ -362,13 +375,28 @@ export const requestHelp = spacetimedb.reducer(
   }
 );
 
+// Wristband press: straight to the supervisor, no buddy stage and no escalation timer.
+export const callSupervisor = spacetimedb.reducer(
+  { sessionId: t.string(), workerId: t.string(), taskId: t.string(), stepId: t.u32(), photo: t.string() },
+  (ctx, args) => {
+    const h = ctx.db.helpRequest.insert({ id: 0n, ...args, status: 'open', claimedBy: '', note: '', createdAt: ctx.timestamp, resolvedAt: undefined });
+    ctx.db.helpRoute.insert({ helpId: h.id, routedTo: 'supervisor', escalatedAt: ctx.timestamp });
+    ctx.db.wristCall.insert({ id: 0n, helpId: h.id, workerId: args.workerId, createdAt: ctx.timestamp, answeredAt: undefined });
+  }
+);
+
 // Atomic: the first claimer wins. A later claim is not an error: it is recorded as a lost attempt
 // (an error would roll the record back), so the floor can show the race and count double-claims.
 export const claimHelp = spacetimedb.reducer({ id: t.u64(), by: t.string() }, (ctx, { id, by }) => {
   const h = ctx.db.helpRequest.id.find(id);
   if (!h) throw new SenderError('no such help request');
   const won = h.status === 'open';
-  if (won) ctx.db.helpRequest.id.update({ ...h, status: 'claimed', claimedBy: by });
+  if (won) {
+    ctx.db.helpRequest.id.update({ ...h, status: 'claimed', claimedBy: by });
+    for (const w of ctx.db.wristCall.helpId.filter(id)) {
+      if (!w.answeredAt) ctx.db.wristCall.id.update({ ...w, answeredAt: ctx.timestamp });
+    }
+  }
   ctx.db.claimAttempt.insert({ id: 0n, helpId: id, by, won, winner: won ? by : h.claimedBy, ts: ctx.timestamp });
 });
 
@@ -376,6 +404,9 @@ export const resolveHelp = spacetimedb.reducer({ id: t.u64(), note: t.string() }
   const h = ctx.db.helpRequest.id.find(id);
   if (!h) throw new SenderError('no such help request');
   ctx.db.helpRequest.id.update({ ...h, status: 'resolved', note, resolvedAt: ctx.timestamp });
+  for (const w of ctx.db.wristCall.helpId.filter(id)) {
+    if (!w.answeredAt) ctx.db.wristCall.id.update({ ...w, answeredAt: ctx.timestamp });
+  }
 });
 
 export const logTalk = spacetimedb.reducer(

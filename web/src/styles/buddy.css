@@ -1,0 +1,44 @@
+/* drigil · buddy phone (/buddy). Rio surface; framed on desktop, full screen on phones. Builds on piedra.css tokens. */
+.bd-wrap { display: flex; justify-content: center; padding: 24px 0 40px; }
+.bd-frame { width: 100%; max-width: 360px; border: 8px solid var(--ink); border-radius: 36px; background: var(--ink); box-shadow: var(--shadow); }
+.bd-screen { border-radius: 28px; padding: 24px 20px; min-height: 640px; display: flex; flex-direction: column; gap: 16px; color: var(--on-deep); background: var(--deep); overflow: hidden; }
+.bd-screen .eyebrow { color: var(--on-deep-2); margin: 0; }
+.bd-top { display: flex; justify-content: space-between; align-items: center; gap: 8px; }
+.bd-who { background: transparent; border: 0; color: var(--on-deep-2); font: 500 13px/1 var(--font-body); min-height: 48px; padding: 0 4px; cursor: pointer; text-decoration: underline; }
+.bd-h1 { font: 800 30px/1.1 var(--font-display); letter-spacing: -0.02em; color: var(--on-deep); margin: 4px 0 0; overflow-wrap: anywhere; }
+.bd-ctx { font: 400 17px/1.5 var(--font-body); color: var(--on-deep-2); margin: 0; }
+.bd-idle { margin: auto 0; display: flex; flex-direction: column; gap: 12px; }
+.bd-ripple { position: relative; width: 72px; height: 72px; margin-bottom: 12px; }
+.bd-ripple span { position: absolute; inset: 0; border-radius: 50%; border: 1.5px solid var(--on-deep-2); opacity: 0; animation: bd-ripple 3.6s ease-out infinite; }
+.bd-ripple span:nth-child(2) { animation-delay: 1.2s; }
+.bd-ripple span:nth-child(3) { animation-delay: 2.4s; }
+@keyframes bd-ripple { 0% { transform: scale(0.3); opacity: 0.7; } 100% { transform: scale(1); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .bd-ripple span { animation: none; opacity: 0.5; } .bd-ripple span:nth-child(2) { transform: scale(0.66); } .bd-ripple span:nth-child(3) { transform: scale(0.33); } }
+.bd-photo { width: 100%; border-radius: 16px; aspect-ratio: 4 / 3; object-fit: cover; display: block; }
+.bd-actions { display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
+.bd-btn { width: 100%; min-height: 56px; font-size: 17px; justify-content: center; }
+.bd-screen .btn-outline { color: var(--on-deep); border-color: color-mix(in srgb, var(--cream) 45%, transparent); background: transparent; }
+.bd-confirm { background: var(--surface); color: var(--ink); border-radius: 20px; padding: 20px; display: flex; flex-direction: column; gap: 12px; margin-top: auto; }
+.bd-confirm p { margin: 0; font: 600 19px/1.35 var(--font-body); }
+.bd-screen .bd-confirm .btn-outline { color: var(--pizarra); border-color: var(--line); }
+.bd-race .race { color: var(--on-deep); }
+.bd-race .muted, .bd-race .small { color: var(--on-deep-2); }
+.bd-note { margin: 0; color: var(--on-deep); font: 400 15px/1.45 var(--font-body); }
+.bd-dc { margin: 0; font: 400 12px/1 var(--font-mono); color: var(--on-deep-2); letter-spacing: 0.04em; }
+
+/* name gate */
+.bd-gate { max-width: 420px; margin: 48px auto; display: flex; flex-direction: column; gap: 12px; }
+.bd-gate-h1 { font: 800 40px/1.05 var(--font-display); letter-spacing: -0.02em; color: var(--pizarra); margin: 0; }
+.bd-gate-sub { font: 400 17px/1.5 var(--font-body); color: var(--ink-muted); margin: 0 0 16px; }
+.bd-gate-label { font: 600 15px/1.2 var(--font-body); color: var(--pizarra); }
+.bd-field { min-height: 56px; font-size: 18px; background: var(--card); color: var(--pizarra); }
+
+@media (max-width: 480px) {
+  .bd-wrap { padding: 0; margin: 0 -16px; }
+  .bd-frame { max-width: none; border: 0; border-radius: 0; box-shadow: none; }
+  .bd-screen { border-radius: 0; min-height: calc(100dvh - 64px); padding: 20px 16px; }
+  .bd-gate { margin: 24px auto; }
+  .bd-gate-h1 { font-size: 32px; }
+}
+.bd-btn:disabled { opacity: 1; background: var(--surface-2); color: var(--ink-2); cursor: not-allowed; }
+.bd-screen .btn-sol { background: var(--help); color: var(--on-help); }

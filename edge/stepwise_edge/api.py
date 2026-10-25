@@ -551,6 +551,59 @@ async def coach_help(sid: str, req: HelpReq) -> dict:
     return {"say": [say(PHRASES["help"])], "photo": photo}
 
 
+# ---------- wristband: one press calls the supervisor ----------
+WRIST_SAY = "Okay. I'm calling your supervisor now."
+WRIST: dict = {"last_press": 0.0, "presses": 0, "last": None}
+
+
+class WristPress(BaseModel):
+    worker_id: str | None = None
+    session_id: str | None = None
+
+
+@router.post("/wrist/press")
+async def wrist_press(req: WristPress | None = None) -> dict:
+    """The wristband (or its on-screen stand-in) was pressed: ring the supervisor now, no buddy stage.
+    Finds the worker's active session (or the most recent one); with none, still calls with what we know."""
+    req = req or WristPress()
+    s = sessions.get(req.session_id or "")
+    if not s and req.worker_id:
+        s = next((x for x in reversed(list(sessions.values())) if x.worker_id == req.worker_id), None)
+    if not s and not req.worker_id and not req.session_id and sessions:
+        s = next(reversed(list(sessions.values())))
+    if not s and req.session_id and req.session_id in ended:
+        s = ended[req.session_id]
+    worker = s.worker_id if s else (req.worker_id or "")
+    if not worker:
+        return {"ok": False, "say": [], "error": "no worker: send worker_id or session_id"}
+    CURRENT_VOICE.set(task_voice(s.task) if s else voices.default_id())
+    now = time.monotonic()
+    again = now - WRIST["last_press"] < 5  # a double tap must not ring twice
+    WRIST["last_press"] = now
+    out = {"ok": True, "say": [say(WRIST_SAY)], "worker_id": worker, "session_id": s.id if s else "", "duplicate": again}
+    if again:
+        return out
+    WRIST["presses"] += 1
+    WRIST["last"] = {"worker_id": worker, "ts": time.time()}
+    sid, tid, step = (s.id, s.task["task_id"], int(s.step["id"])) if s else (req.session_id or "", "", 0)
+    stdb().call("call_supervisor", sid, worker, tid, step, "")
+    if s:
+        log_event(s, "help", "wristband", "wristband", 1.0, 0, "wristband pressed: supervisor called")
+        s.flag("help")
+    return out
+
+
+@router.get("/wrist/status")
+def wrist_status() -> dict:
+    """For the serial bridge: is the edge app up, who is active, and the last press."""
+    return {
+        "ok": True,
+        "presses": WRIST["presses"],
+        "last": WRIST["last"],
+        "active": [{"session_id": x.id, "worker_id": x.worker_id} for x in sessions.values()],
+    }
+
+
 @router.post("/coach/{sid}/end")
 async def coach_end(sid: str) -> dict:
     s = sessions.pop(sid, None)

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
-import { Brand } from '../components/Layout'
 import { LiveCheck } from '../components/LiveCheck'
-import { CaptionBar, StepDots } from '../components/ui'
+import { CaptionBar } from '../components/ui'
+import { StepTimeline } from '../components/viz'
 import { api, type PublicConfig, type StepPayload, type Task } from '../lib/api'
 import { AudioQueue, apiUrl, type Say, type SpeechKind } from '../lib/audio'
 
@@ -153,8 +153,7 @@ function StepsView({ taskId }: { taskId?: string }) {
 
   return (
     <div className="worker-shell">
-      <header className="worker-header">
-        <Brand />
+      <header className="worker-header wk-steps-head">
         <Link to="/" className="btn btn-ghost">
           Exit
         </Link>
@@ -167,36 +166,43 @@ function StepsView({ taskId }: { taskId?: string }) {
         )}
 
         {!taskId && (
-          <div className="stack" style={{ gap: 16 }}>
-            <h1 style={{ fontSize: 40 }}>Pick your task</h1>
-            {tasks.map((t) => (
-              <button key={t.task_id} className="btn btn-secondary btn-xl btn-block" style={{ justifyContent: 'space-between' }} onClick={() => nav(`/steps/${t.task_id}`)}>
-                <span>{t.title}</span>
-                <span className="muted">{t.steps} steps →</span>
-              </button>
-            ))}
+          <div className="wk stack" style={{ gap: 16 }}>
+            <h1 className="wk-display">Pick your task</h1>
+            <div className="task-list wk-tasks">
+              {tasks.map((t) => (
+                <button key={t.task_id} className="task-row card wk-task wk-task-btn" onClick={() => nav(`/steps/${t.task_id}`)}>
+                  <span className="task-row-title">{t.title}</span>
+                  <span className="wk-mono">{t.steps} steps →</span>
+                </button>
+              ))}
+            </div>
             {!tasks.length && <p className="muted">No tasks yet. Ask your supervisor to make one.</p>}
           </div>
         )}
 
         {task && step && !done && (
-          <div className="stack" style={{ gap: 22 }}>
+          <div className="wk stack" style={{ gap: 22 }}>
             <div className="spread">
-              <span className="muted" style={{ fontWeight: 700, fontSize: 20 }}>
-                {task.title}
-              </span>
+              <div className="stack" style={{ gap: 4 }}>
+                <p className="eyebrow">
+                  Step {i + 1} of {task.steps.length}
+                </p>
+                <span className="wk-title">{task.title}</span>
+              </div>
               <div className="row">
-                <StepDots total={task.steps.length} current={i} />
                 {sid ? (
-                  <button className="btn btn-secondary" onClick={stopLive}>
-                    ■ Stop camera
+                  <button className="btn btn-outline wk-btn" onClick={stopLive}>
+                    Stop camera
                   </button>
                 ) : (
                   <button className="btn btn-primary" onClick={startLive} disabled={!cfg || liveStarting}>
-                    📷 {liveStarting ? 'Starting…' : 'Live check'}
+                    {liveStarting ? 'Starting…' : 'Live check'}
                   </button>
                 )}
               </div>
+            </div>
+            <div className="wk-path">
+              <StepTimeline steps={task.steps.map((x) => ({ id: x.id, instruction: x.instruction, photo: x.reference_photo }))} current={i} orientation="horizontal" size="sm" />
             </div>
             <div className={`worker-step ${sid ? 'live' : ''}`}>
               <div className="stack" style={{ gap: 18 }}>
@@ -209,10 +215,10 @@ function StepsView({ taskId }: { taskId?: string }) {
                       say(step.instruction)
                     }}
                   >
-                    🔊 Hear it
+                    Hear it
                   </button>
                   <button
-                    className="btn btn-secondary btn-xl"
+                    className="btn btn-outline btn-xl"
                     aria-expanded={showWhy}
                     onClick={() => {
                       started.current = true
@@ -223,8 +229,8 @@ function StepsView({ taskId }: { taskId?: string }) {
                     Why?
                   </button>
                   {videoUrl && step.start_s !== undefined && (
-                    <button className="btn btn-secondary btn-xl" aria-pressed={showClip} onClick={() => setShowClip((v) => !v)}>
-                      ▶ Show me
+                    <button className="btn btn-outline btn-xl" aria-pressed={showClip} onClick={() => setShowClip((v) => !v)}>
+                      Show me
                     </button>
                   )}
                 </div>
@@ -254,11 +260,11 @@ function StepsView({ taskId }: { taskId?: string }) {
               )}
             </div>
             <div className="worker-nav">
-              <button className="btn btn-secondary btn-xl" onClick={() => go(-1)} disabled={i === 0}>
+              <button className="btn btn-outline btn-xl" onClick={() => go(-1)} disabled={i === 0}>
                 ← Back
               </button>
               <button className="btn btn-primary btn-xl" onClick={() => go(1)}>
-                {i === task.steps.length - 1 ? 'I finished ✓' : 'Next step →'}
+                {i === task.steps.length - 1 ? 'I finished' : 'Next step →'}
               </button>
             </div>
           </div>
@@ -266,7 +272,7 @@ function StepsView({ taskId }: { taskId?: string }) {
 
         {task && done && (
           <div className="stack" style={{ gap: 24, alignItems: 'center', textAlign: 'center', paddingTop: 40 }}>
-            <p className="instruction-text">You did every step. Great work!</p>
+            <h1 className="wk-display">You did every step. Great work!</h1>
             <div className="row" style={{ justifyContent: 'center' }}>
               <button
                 className="btn btn-primary btn-xl"
@@ -278,7 +284,7 @@ function StepsView({ taskId }: { taskId?: string }) {
               >
                 Start again
               </button>
-              <Link className="btn btn-secondary btn-xl" to="/steps">
+              <Link className="btn btn-outline btn-xl" to="/steps">
                 Other tasks
               </Link>
             </div>

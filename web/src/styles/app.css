@@ -179,7 +179,7 @@ textarea {
   line-height: 1.4;
 }
 .tier-dot { width: 8px; height: 8px; border-radius: 50%; background: currentColor; }
-.tier-latency { font-weight: 400; opacity: 0.9; }
+.tier-latency { font-weight: 400; }
 .tier-checker { color: var(--tier-checker); background: var(--tier-checker-bg); }
 .tier-bitdeer, .tier-gemini, .tier-haiku, .tier-sonnet { color: var(--tier-bitdeer); background: var(--tier-bitdeer-bg); }
 .tier-claude { color: var(--tier-claude); background: var(--tier-claude-bg); }
@@ -350,8 +350,8 @@ textarea {
 .consent-banner strong { color: inherit; }
 .consent-banner.missing { background: var(--almost-bg); color: var(--almost); }
 
-/* Caption bar */
-.caption {
+/* Caption bar (CaptionBar in ui.tsx). Scoped: .caption alone is the small grey brand caption. */
+.caption-bar {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -368,7 +368,7 @@ textarea {
 .caption-wave i:nth-child(2) { animation-delay: 0.15s; }
 .caption-wave i:nth-child(3) { animation-delay: 0.3s; }
 .caption-wave i:nth-child(4) { animation-delay: 0.45s; }
-.caption.quiet .caption-wave i { animation: none; height: 20%; }
+.caption-bar.quiet .caption-wave i { animation: none; height: 20%; }
 
 /* Tier lamps (worker view / demo) */
 .lamps { display: flex; gap: 10px; flex-wrap: wrap; }
@@ -437,7 +437,7 @@ textarea.search { min-height: 96px; resize: vertical; }
   .step-card .tray-thumb { width: 96px; }
   .help-card { grid-template-columns: 72px 1fr; }
   .help-card .tray-thumb { width: 72px; }
-  .caption { font-size: 20px; }
+  .caption-bar { font-size: 20px; }
 }
 
 /* Worker view */
@@ -525,7 +525,7 @@ table.killtests td.detail-cell { white-space: normal; min-width: 280px; }
 .live-wrap { position: relative; }
 .live-img { display: block; width: 100%; height: auto; aspect-ratio: 4 / 3; object-fit: cover; border-radius: var(--radius-sm); background: var(--surface-2); }
 .live-img.calibrating { cursor: crosshair; outline: 3px dashed var(--primary); outline-offset: 2px; }
-.pick-dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px #111; pointer-events: none; }
+.pick-dot { position: absolute; width: 22px; height: 22px; margin: -11px 0 0 -11px; border-radius: 50%; border: 3px solid #fff; box-shadow: 0 0 0 2px #2a3133; pointer-events: none; }
 .gate-chip { display: inline-flex; align-items: center; gap: 6px; padding: 3px 12px; border-radius: 999px; font-size: 15px; font-weight: 700; background: var(--surface-2); color: var(--ink-2); }
 .gate-chip .dot { width: 9px; height: 9px; }
 .gate-moving .dot { background: var(--almost-fill); }
@@ -537,7 +537,7 @@ table.killtests td.detail-cell { white-space: normal; min-width: 280px; }
 .live-label::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: var(--chart-checker); }
 
 /* Camera stage */
-.cam { position: relative; border-radius: var(--radius); overflow: hidden; background: #111; aspect-ratio: 16 / 9; touch-action: none; }
+.cam { position: relative; border-radius: var(--radius); overflow: hidden; background: #2a3133; aspect-ratio: 16 / 9; touch-action: none; }
 .cam.editing { cursor: crosshair; outline: 3px dashed var(--primary); outline-offset: 2px; }
 .cam-video, .cam-overlay { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; }
 .work-area { position: absolute; border: 3px dashed rgba(92, 194, 188, 0.9); border-radius: 10px; pointer-events: none; }
@@ -581,7 +581,7 @@ table.killtests td.detail-cell { white-space: normal; min-width: 280px; }
 .tier-instant { color: var(--ink-2); background: var(--surface-2); }
 
 /* Video breakdown */
-.video-player { width: 100%; border-radius: var(--radius); background: #111; display: block; }
+.video-player { width: 100%; border-radius: var(--radius); background: #2a3133; display: block; }
 .stage-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
 .stage { display: flex; align-items: center; gap: 8px; font-size: 16px; color: var(--ink-2); }
 .stage .dot { background: var(--line); }

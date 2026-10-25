@@ -38,6 +38,7 @@ import AgentCallEndReducer from "./agent_call_end_reducer";
 import AgentCallStartReducer from "./agent_call_start_reducer";
 import AgentToolLogReducer from "./agent_tool_log_reducer";
 import AgentTurnLogReducer from "./agent_turn_log_reducer";
+import CallSupervisorReducer from "./call_supervisor_reducer";
 import ClaimHelpReducer from "./claim_help_reducer";
 import CoachEndCallReducer from "./coach_end_call_reducer";
 import DeleteTaskReducer from "./delete_task_reducer";
@@ -77,6 +78,7 @@ import TalkEventRow from "./talk_event_table";
 import TaskRow from "./task_table";
 import WorkerRow from "./worker_table";
 import WorkerProgressRow from "./worker_progress_table";
+import WristCallRow from "./wrist_call_table";
 
 /** Type-only namespace exports for generated type groups. */
 
@@ -274,6 +276,20 @@ const tablesSchema = __schema({
       { name: 'worker_progress_worker_id_key', constraint: 'unique', columns: ['workerId'] },
     ],
   }, WorkerProgressRow),
+  wristCall: __table({
+    name: 'wrist_call',
+    indexes: [
+      { accessor: 'helpId', name: 'wrist_call_help_id_idx_btree', algorithm: 'btree', columns: [
+        'helpId',
+      ] },
+      { accessor: 'id', name: 'wrist_call_id_idx_btree', algorithm: 'btree', columns: [
+        'id',
+      ] },
+    ],
+    constraints: [
+      { name: 'wrist_call_id_key', constraint: 'unique', columns: ['id'] },
+    ],
+  }, WristCallRow),
   myMastery: __table({
     name: 'my_mastery',
     indexes: [
@@ -303,6 +319,7 @@ const reducersSchema = __reducers(
   __reducerSchema("agent_call_start", AgentCallStartReducer),
   __reducerSchema("agent_tool_log", AgentToolLogReducer),
   __reducerSchema("agent_turn_log", AgentTurnLogReducer),
+  __reducerSchema("call_supervisor", CallSupervisorReducer),
   __reducerSchema("claim_help", ClaimHelpReducer),
   __reducerSchema("coach_end_call", CoachEndCallReducer),
   __reducerSchema("delete_task", DeleteTaskReducer),

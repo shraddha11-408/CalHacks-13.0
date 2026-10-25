@@ -248,3 +248,12 @@ export const WorkerProgress = __t.object("WorkerProgress", {
 });
 export type WorkerProgress = __Infer<typeof WorkerProgress>;
 
+export const WristCall = __t.object("WristCall", {
+  id: __t.u64(),
+  helpId: __t.u64(),
+  workerId: __t.string(),
+  createdAt: __t.timestamp(),
+  answeredAt: __t.option(__t.timestamp()),
+});
+export type WristCall = __Infer<typeof WristCall>;
+

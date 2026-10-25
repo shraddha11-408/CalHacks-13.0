@@ -1,11 +1,11 @@
-/* IDD Help design tokens. Minimal: neutral surfaces, one indigo accent.
+/* IDD Help design tokens. Minimal: neutral surfaces, one Rio accent.
    Every text/background pair here is checked for WCAG AA (scripts/check_contrast.mjs).
    Red is only for help/urgent. A worker's mistake is amber ("almost"), never red. */
 
 :root {
   color-scheme: light;
 
-  --font: 'Atkinson Hyperlegible', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font: 'Onest', system-ui, -apple-system, 'Segoe UI', sans-serif;
   --font-mono: ui-monospace, 'SF Mono', Menlo, Consolas, monospace;
 
   /* Surfaces & ink */
@@ -15,13 +15,13 @@
   --ink: #18181b;
   --ink-2: #5b5b63;
   --line: #e4e4e0;
-  --focus: #3f4bd1;
+  --focus: #0f3b3a;
 
-  /* Primary: one calm indigo accent, everything else neutral */
-  --primary: #3f4bd1;
+  /* Primary: one calm Rio accent, everything else neutral */
+  --primary: #0f3b3a;
   --primary-hover: #323cb0;
   --on-primary: #ffffff;
-  --primary-soft: #eceefc;
+  --primary-soft: #dfe7e4;
   --primary-soft-ink: #2c3596;
 
   /* States */
@@ -39,9 +39,9 @@
   /* Tier badges (text on soft bg) */
   --tier-checker: #1f7a4a;
   --tier-checker-bg: #e7f4ec;
-  --tier-bitdeer: #3f4bd1;
-  --tier-bitdeer-bg: #eceefc;
-  --tier-claude: #6b4fbb;
+  --tier-bitdeer: #0f3b3a;
+  --tier-bitdeer-bg: #dfe7e4;
+  --tier-claude: #0f3b3a;
   --tier-claude-bg: #f1edfb;
   --tier-moss: #136f63;
   --tier-moss-bg: #e3f3f0;
@@ -60,7 +60,7 @@
   /* Home animation figure (decorative, not text) */
   --fig-skin: #e3b48f;
   --fig-hair: #3b302b;
-  --fig-shirt: #3f4bd1;
+  --fig-shirt: #0f3b3a;
   --fig-pants: #3a3a42;
   --fig-table: #d9d6cf;
   --fig-cup: #ffffff;
@@ -83,112 +83,3 @@
   --dur: 240ms;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme='light']) {
-    color-scheme: dark;
-    --bg: #111113;
-    --surface: #19191c;
-    --surface-2: #222226;
-    --ink: #f2f2f0;
-    --ink-2: #a8a8b0;
-    --line: #2e2e33;
-    --focus: #9aa3ff;
-    --primary: #9aa3ff;
-    --primary-hover: #b4bbff;
-    --on-primary: #14163a;
-    --primary-soft: #23264a;
-    --primary-soft-ink: #c7ccff;
-    --success: #7ad3a0;
-    --success-bg: #15301f;
-    --almost: #f2c274;
-    --almost-bg: #38290f;
-    --almost-fill: #e8a33d;
-    --urgent: #f6a29a;
-    --urgent-bg: #3a1714;
-    --on-urgent: #2a0b09;
-    --urgent-fill: #f28b82;
-    --idle: #85858d;
-    --tier-checker: #7ad3a0;
-    --tier-checker-bg: #15301f;
-    --tier-bitdeer: #b4bbff;
-    --tier-bitdeer-bg: #23264a;
-    --tier-claude: #d2b8f5;
-    --tier-claude-bg: #2c2142;
-    --tier-moss: #7fd8cb;
-    --tier-moss-bg: #123430;
-    --chart-checker: #4aa36b;
-    --chart-bitdeer: #7680ea;
-    --chart-claude: #b07ad8;
-    --chart-moss: #2ab3a1;
-    --chart-grid: #26262b;
-    --sim-bg: #f3e3b8;
-    --sim-ink: #2b2410;
-    --fig-skin: #d9a77f;
-    --fig-hair: #1f1916;
-    --fig-shirt: #9aa3ff;
-    --fig-pants: #4a4a55;
-    --fig-table: #33333a;
-    --fig-cup: #f2f2f0;
-    --fig-sleeve: #c08a58;
-    --fig-lens: #9fd3ff;
-    --tray: #2c2b28;
-    --tray-edge: #46443f;
-    --slot: #232220;
-    --item-cloth: #f4f1ea;
-    --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
-  }
-}
-
-:root[data-theme='dark'] {
-  color-scheme: dark;
-  --bg: #111113;
-  --surface: #19191c;
-  --surface-2: #222226;
-  --ink: #f2f2f0;
-  --ink-2: #a8a8b0;
-  --line: #2e2e33;
-  --focus: #9aa3ff;
-  --primary: #9aa3ff;
-  --primary-hover: #b4bbff;
-  --on-primary: #14163a;
-  --primary-soft: #23264a;
-  --primary-soft-ink: #c7ccff;
-  --success: #7ad3a0;
-  --success-bg: #15301f;
-  --almost: #f2c274;
-  --almost-bg: #38290f;
-  --almost-fill: #e8a33d;
-  --urgent: #f6a29a;
-  --urgent-bg: #3a1714;
-  --on-urgent: #2a0b09;
-  --urgent-fill: #f28b82;
-  --idle: #85858d;
-  --tier-checker: #7ad3a0;
-  --tier-checker-bg: #15301f;
-  --tier-bitdeer: #b4bbff;
-  --tier-bitdeer-bg: #23264a;
-  --tier-claude: #d2b8f5;
-  --tier-claude-bg: #2c2142;
-  --tier-moss: #7fd8cb;
-  --tier-moss-bg: #123430;
-  --chart-checker: #4aa36b;
-  --chart-bitdeer: #7680ea;
-  --chart-claude: #b07ad8;
-  --chart-moss: #2ab3a1;
-  --chart-grid: #26262b;
-  --sim-bg: #f3e3b8;
-  --sim-ink: #2b2410;
-  --fig-skin: #d9a77f;
-  --fig-hair: #1f1916;
-  --fig-shirt: #9aa3ff;
-  --fig-pants: #4a4a55;
-  --fig-table: #33333a;
-  --fig-cup: #f2f2f0;
-  --fig-sleeve: #c08a58;
-  --fig-lens: #9fd3ff;
-  --tray: #2c2b28;
-  --tray-edge: #46443f;
-  --slot: #232220;
-  --item-cloth: #f4f1ea;
-  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 20px rgba(0, 0, 0, 0.25);
-}
