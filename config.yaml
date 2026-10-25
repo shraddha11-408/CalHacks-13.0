@@ -17,7 +17,7 @@ devices:
   xvf3800_name_match: "XVF3800"
   # laptop = built-in speaker. xvf3800 = mic array audio out (OPEN, AGENTS.md §14).
   speaker: laptop
-  # uno_q = Uno Q wrist node on USB serial (edge/stepwise_edge/wrist.py): hold 1.5 s = help, short touch = hear the step.
+  # uno_q = Uno Q wrist node on USB serial (edge/stepwise_edge/wrist.py): hold 1.5 s = call the supervisor (CALL), short touch = a quiet note to the supervisor.
   # keyboard = no wrist node (use the page's buttons).
   wrist: uno_q
   # auto = find the Uno Q by its USB vendor id (works as COM5, /dev/cu.usbmodem..., /dev/ttyACM0). Or name a port.

@@ -74,7 +74,7 @@ a task · `/buddy` the buddy phone. Light and dark mode.
  audio queue + captions ◀──────────────────    Cartesia TTS clips in the cloned voice ◀───▶  Cartesia sonic-3.6 / ink-whisper / clone
                                               reducers over HTTP (fire-and-forget) ──────▶  SpacetimeDB module
  Supervisor / buddy pages ◀═══════ live subscriptions (SpacetimeDB TypeScript SDK) ═══════   (local server or Maincloud)
- Uno Q wristband ─ USB serial ─▶ hardware/backend/uno_serial_bridge.py ─▶ /wrist/press ─▶ call_supervisor reducer
+ Uno Q wristband ─ USB serial ─▶ edge app (or the bridge) ─▶ /wrist/press ─▶ hold: call_supervisor · short: notify_supervisor
 ```
 
 | Part | Where | Stack |
@@ -241,7 +241,7 @@ or `--simulate` without hardware. Details are in [wrist/README.md](wrist/README.
 
 **Tests:**
 ```bash
-.venv/bin/python -m pytest              # coach decision rules, debounce, live-check parsing, progress, voice (77 tests)
+.venv/bin/python -m pytest              # coach decision rules, debounce, live-check parsing, progress, voice (80 tests)
 (cd web && npm test)                    # trigger engine
 .venv/bin/python scripts/stdb_module_check.py   # SpacetimeDB rules against a separate test database
 ```

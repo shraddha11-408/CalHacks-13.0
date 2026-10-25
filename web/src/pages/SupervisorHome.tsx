@@ -262,6 +262,7 @@ function HelpTab({ showTest }: { showTest: boolean }) {
   const [workers] = useTable(tables.worker)
   const [attempts] = useTable(tables.claimAttempt)
   const [routes] = useTable(tables.helpRoute)
+  const [wristCalls] = useTable(tables.wristCall)
   const claim = useReducer(reducers.claimHelp)
   const resolve = useReducer(reducers.resolveHelp)
   const { title, stepText } = useStepLookup()
@@ -279,13 +280,14 @@ function HelpTab({ showTest }: { showTest: boolean }) {
       {open.length === 0 && <EmptyState title="No one needs help right now" text="Help requests from workers appear here the moment they are sent." />}
       {open.map((h) => {
         const route = routes.find((r) => r.helpId === h.id)?.routedTo
+        const notice = route === 'notice' // wristband short touch: a quiet note, nothing rang
         const isOpen = h.status === 'open'
         return (
           <article key={String(h.id)} className={`card sv-alert ${isOpen ? 'sv-alert-open' : ''}`}>
             {h.photo ? <img src={apiUrl(h.photo)} alt={`What ${name(h.workerId)} sees`} /> : <div className="alert-nophoto" aria-hidden />}
             <div className="stack" style={{ gap: 8, flex: 1, minWidth: 0 }}>
               <div className="spread">
-                <strong className="sv-alert-title">{name(h.workerId)} {isOpen ? 'needs a hand' : 'has help coming'}</strong>
+                <strong className="sv-alert-title">{name(h.workerId)} {notice && isOpen ? 'sent you a note' : isOpen ? 'needs a hand' : 'has help coming'}</strong>
                 <span className="sv-wait num" aria-label="Waiting time">{isOpen ? `Waiting ${clock(h.createdAt.toDate())}` : `${h.claimedBy} is going`}</span>
               </div>
               <span className="sv-where">
@@ -293,7 +295,11 @@ function HelpTab({ showTest }: { showTest: boolean }) {
               </span>
               {isOpen && (
                 <span className="small">
-                  {route === 'supervisor' ? (
+                  {notice ? (
+                    <span className="muted">A short touch on the wristband. Not urgent: look when you can.</span>
+                  ) : wristCalls.some((w) => w.helpId === h.id) ? (
+                    <strong>Called from the wristband (held down).</strong>
+                  ) : route === 'supervisor' ? (
                     <strong>No buddy answered in <span className="num">20 s</span>, so it came to you.</strong>
                   ) : (
                     <span className="muted">Sent to help buddies first. It comes to you if nobody answers in <span className="num">20 s</span>.</span>

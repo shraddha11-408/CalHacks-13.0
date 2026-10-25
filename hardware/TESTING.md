@@ -52,7 +52,7 @@ Use the audio in your own code: `from audio_receiver import iter_pcm` then `for 
 
 1. Flash `uno_q/wrist_node/wrist_node.ino` (Arduino IDE or App Lab). Verified on the real Uno Q (2026-10-24): `CALL` shows correctly on the 13x8 matrix.
 2. Plug the Uno Q into your laptop and run the bridge. It finds the port by itself (`/dev/cu.usbmodem*` on macOS, `/dev/ttyACM*` on Linux). Several boards plugged in, or Windows: `UNO_PORT=/dev/cu.usbmodemXXXX` (`UNO_PORT=COM5`).
-3. Short touch (< 1.5 s): one flash, prints `TALK REQUEST`. Long touch (>= 1.5 s): prints `HELP ALERT` and the matrix shows `CALL` for 2 s.
+3. Short touch (< 1.5 s): one flash, prints `NOTE TO SUPERVISOR` (sends `kind: notify` if the edge app is up). Long touch (>= 1.5 s): prints `HELP ALERT` and the matrix shows `CALL` for 2 s.
 4. Alignment check: send `TEST` over the serial port; a full one-pixel border should appear for 3 s.
 5. In the app the bridge is not needed: with `devices.wrist: uno_q` (the default) the edge app opens the port itself and `GET /health` shows `"wrist": "connected on ..."`. Close the bridge first. See `wrist/README.md`.
 

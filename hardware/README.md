@@ -54,7 +54,7 @@ Commands are limited to 32 characters. Unknown commands are ignored.
 1. `DOWN` → record the time and reply `ACK` right away, so the worker sees the touch registered.
 2. `UP` → measure the hold time.
    - **>= 1.5 s** (long touch) → `HELP ALERT`, reply `BUZZ`: the matrix shows **CALL**. This is the "I'm stuck" request.
-   - **< 1.5 s** (short touch) → `TALK REQUEST` (for a spoken question or "what now?"). The only feedback is the single 200 ms flash from the `ACK` sent on touch down.
+   - **< 1.5 s** (short touch) → `NOTE TO SUPERVISOR` (a quiet note in the supervisor's help list; nothing rings). The only feedback is the single 200 ms flash from the `ACK` sent on touch down.
 
 Right now both outcomes only print to the console. The next step is to forward them to the edge app (help → `request_help` reducer in SpacetimeDB, which pages the buddy first and the supervisor after 20 s).
 

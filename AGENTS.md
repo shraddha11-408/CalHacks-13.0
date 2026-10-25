@@ -139,8 +139,9 @@ Switching back is one call in `api.run_check`.
   level less support. `DEMOTE_ERRORS` = 2 errors in the last `WINDOW` = 5 → one level more. The supervisor can
   override with `set_support_level`. Levels: 0 full instruction · 1 short cue · 2 alerts only · 3 on their own.
 - **Help:** `request_help` routes to buddies first. The scheduled `escalate_help` moves it to the supervisor after
-  20 s. `claim_help` is atomic, so exactly one claimer wins and losers are logged. `call_supervisor` (wristband)
-  routes straight to the supervisor and records a `wrist_call`. Claim and resolve stamp `answered_at`.
+  20 s. `claim_help` is atomic, so exactly one claimer wins and losers are logged. `call_supervisor` (wristband
+  hold) routes straight to the supervisor and records a `wrist_call` (their screen rings). `notify_supervisor`
+  (wristband short touch) is a quiet note: routed `notice`, no ringing, no buddy alert, no escalation. Claim and resolve stamp `answered_at`.
 - **Scheduled reducers:** `escalate_help`, a presence sweep, and the progress rollup (both every 10 s).
 - **Changing the schema:** make additive changes only and publish without wiping data
   (`spacetime publish stepwise --server local --yes`). Then regenerate the bindings into `web/src/module_bindings/`
@@ -195,7 +196,7 @@ python3.11 -m venv .venv && .venv/bin/pip install -r requirements.txt
 (cd web && npm install)
 ./run.sh                                       # SpacetimeDB :3000 + module publish, edge :8000, web https://localhost:5173
 .venv/bin/python scripts/seed_example_tasks.py # example café tasks for the demo worker
-.venv/bin/python -m pytest                     # 77 tests
+.venv/bin/python -m pytest                     # 80 tests
 (cd web && npx tsc -b --noEmit && npm test)
 .venv/bin/python scripts/stdb_module_check.py  # module rules on a separate test database
 ```

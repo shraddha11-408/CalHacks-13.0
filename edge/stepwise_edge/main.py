@@ -50,18 +50,17 @@ SECRET_KEYS = [
 
 
 def _start_wrist(loop: asyncio.AbstractEventLoop) -> WristNode | None:
-    """devices.wrist: uno_q -> the Uno Q wrist node on USB serial (wrist.py). Touches reach the worker's
-    page as "wrist" events on the WebSocket; the page sends the help request with a photo."""
+    """devices.wrist: uno_q -> the Uno Q wrist node on USB serial (wrist.py). Hold = call the supervisor,
+    short touch = a quiet note; both run api.wrist_press on the event loop. The worker's page hears about it
+    as a "wrist" event on the WebSocket and speaks the reply."""
     if CONFIG["devices"].get("wrist") != "uno_q":
         return None
 
-    def send_help(sid: str) -> None:
-        # No page answered the wrist event: run the normal help route on the event loop.
-        fut = asyncio.run_coroutine_threadsafe(api.coach_help(sid, api.HelpReq()), loop)
-        fut.add_done_callback(lambda f: f.exception() and log.warning("wrist help failed: %s", f.exception()))
+    def press(kind: str, sid: str):
+        return asyncio.run_coroutine_threadsafe(api.wrist_press(api.WristPress(session_id=sid, kind=kind)), loop)
 
-    router = HelpRouter(api.sessions, bus.publish, send_help)
-    node = WristNode(CONFIG["devices"].get("wrist_port", "auto"), on_help=router.on_help, on_what_now=router.on_what_now)
+    router = HelpRouter(api.sessions, bus.publish, press)
+    node = WristNode(CONFIG["devices"].get("wrist_port", "auto"), on_hold=router.on_hold, on_touch=router.on_touch)
     router.node = node
     api.HELP_SENT_HOOKS.append(router.help_sent)
     return node.start()

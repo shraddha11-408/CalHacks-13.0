@@ -47,6 +47,7 @@ import EnsureSchedulesReducer from "./ensure_schedules_reducer";
 import HeartbeatReducer from "./heartbeat_reducer";
 import LogStepEventReducer from "./log_step_event_reducer";
 import LogTalkReducer from "./log_talk_reducer";
+import NotifySupervisorReducer from "./notify_supervisor_reducer";
 import RecordStepOutcomeReducer from "./record_step_outcome_reducer";
 import RegisterDeviceReducer from "./register_device_reducer";
 import RequestHelpReducer from "./request_help_reducer";
@@ -328,6 +329,7 @@ const reducersSchema = __reducers(
   __reducerSchema("heartbeat", HeartbeatReducer),
   __reducerSchema("log_step_event", LogStepEventReducer),
   __reducerSchema("log_talk", LogTalkReducer),
+  __reducerSchema("notify_supervisor", NotifySupervisorReducer),
   __reducerSchema("record_step_outcome", RecordStepOutcomeReducer),
   __reducerSchema("register_device", RegisterDeviceReducer),
   __reducerSchema("request_help", RequestHelpReducer),

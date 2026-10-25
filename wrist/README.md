@@ -5,15 +5,17 @@ Arduino Uno Q wrist node: a touch sensor plus the built-in LED matrix, connected
 | Touch | What happens |
 |---|---|
 | Any touch | the matrix flashes once (`ACK`) |
-| Hold 1.5 s or more | "I'm stuck": the worker's page sends a help request with a photo; the matrix shows `CALL` once it has gone out |
-| Shorter | "What now?": the page says the current step again |
+| Hold 1.5 s or more | **Call the supervisor** (`call_supervisor`): their screen rings until someone answers; the matrix shows `CALL` once the call has gone out; the worker hears "Okay. I'm calling your supervisor now." |
+| Shorter | **A quiet note to the supervisor** (`notify_supervisor`): a line in the supervisor's help list, marked as a note; nothing rings, no buddy alert, no escalation; the worker hears "Okay. I told your supervisor." |
+
+Both go through `POST /wrist/press` (`kind: call | notify`, the code in `api.wrist_press`) and carry the newest
+face-blurred live frame as the photo. A second press of the same kind within 5 s counts once.
 
 - **Plug and play:** `devices.wrist: uno_q` and `devices.wrist_port: auto` in `config.yaml`. The app finds the board by its USB vendor id (Arduino, `0x2341`) on macOS, Windows and Linux. To force a port: `wrist_port: COM5`. `GET /health` shows `"wrist": "connected on ..."`.
 - Only one program can open the serial port. Do not run `hardware/backend/uno_serial_bridge.py` while the app reads the board; the bridge is the other way in (below).
-- If the page does not answer a hold within 3 s, the server sends the help itself (no photo), so a hold never goes nowhere while a session runs.
-- `CALL` also appears when help is sent from the page's button or by voice.
-- A second hold on the same step does not page again; it shows `CALL` and the page says "Help is coming."
-- **Gap:** with no coaching session running, a hold only logs a warning and sends a `no_session` event; it reaches nobody.
+- The edge sends the call or note itself (no waiting on the page); the worker's page only speaks the reply.
+- `CALL` also appears when help is sent from the page's help button, by voice, or from the on-screen wristband button.
+- **Gap:** with no coaching session running, a touch only logs a warning and sends a `no_session` event; it reaches nobody.
 - `devices.wrist: keyboard` turns the wrist node off (use the page's buttons).
 
 ## Verified on the real board (2026-10-24)
@@ -26,11 +28,11 @@ Arduino Uno Q wrist node: a touch sensor plus the built-in LED matrix, connected
 ## Other way in: the bridge and the on-screen button (`POST /wrist/press`)
 
 Use this when the edge app is not reading the board (`devices.wrist: keyboard`): only one program can open
-the serial port. This path calls the supervisor directly, with no buddy stage and no photo.
+the serial port. Same two actions as above: hold = call, shorter = note.
 
 ### What it does
-Hold the wristband sensor for 1.5 seconds or more: the supervisor is called. A shorter touch is a talk
-request (logged only).
+Hold the wristband sensor for 1.5 seconds or more: the supervisor is called (the bridge fires as soon as the
+hold passes 1.5 s). A shorter touch sends the supervisor a quiet note (`kind: notify`).
 
 ```
 touch sensor -> Uno Q --USB serial 115200 (DOWN / UP)--> bridge --POST /wrist/press--> edge app

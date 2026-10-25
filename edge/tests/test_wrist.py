@@ -1,5 +1,6 @@
 """Wrist node over USB serial: the timing and help routing are the product (AGENTS.md §26)."""
 import threading
+from concurrent.futures import Future
 from types import SimpleNamespace
 
 from stepwise_edge.wrist import ARDUINO_VID, HOLD_FOR_HELP_S, HelpRouter, WristNode, find_port
@@ -35,12 +36,12 @@ class Clock:
         return self.t
 
 
-def run_node(lines_and_times, on_help=None, on_what_now=None):
+def run_node(lines_and_times, on_hold=None, on_touch=None):
     """lines_and_times: [(b"DOWN\\n", t), ...]; the clock reads t when that line is returned."""
     clock = Clock()
     calls = []
-    node = WristNode(on_help=on_help or (lambda: calls.append("help")),
-                     on_what_now=on_what_now or (lambda: calls.append("what_now")), clock=clock)
+    node = WristNode(on_hold=on_hold or (lambda: calls.append("call")),
+                     on_touch=on_touch or (lambda: calls.append("notify")), clock=clock)
     times = iter([t for _, t in lines_and_times])
 
     class TimedSerial(FakeSerial):
@@ -84,15 +85,15 @@ def test_touch_down_is_acknowledged_right_away():
     assert written == [b"ACK\n"]
 
 
-def test_long_hold_is_help_short_touch_is_what_now():
+def test_long_hold_calls_short_touch_notifies():
     calls, _ = run_node([(b"DOWN\n", 0.0), (b"UP\n", HOLD_FOR_HELP_S + 0.1),
                          (b"DOWN\n", 5.0), (b"UP\n", 5.3)])
-    assert calls == ["help", "what_now"]
+    assert calls == ["call", "notify"]
 
 
 def test_exactly_the_threshold_counts_as_help():
     calls, _ = run_node([(b"DOWN\n", 0.0), (b"UP\n", HOLD_FOR_HELP_S)])
-    assert calls == ["help"]
+    assert calls == ["call"]
 
 
 def test_up_without_down_and_noise_are_ignored():
@@ -107,8 +108,8 @@ def test_an_app_error_does_not_break_the_wrist_loop():
         raise RuntimeError("app bug")
 
     got, _ = run_node([(b"DOWN\n", 0.0), (b"UP\n", 2.0), (b"DOWN\n", 3.0), (b"UP\n", 3.2)],
-                      on_help=boom, on_what_now=lambda: calls.append("what_now"))
-    assert calls == ["what_now"]
+                      on_hold=boom, on_touch=lambda: calls.append("notify"))
+    assert calls == ["notify"]
 
 
 def test_send_is_false_when_not_connected():
@@ -140,75 +141,73 @@ def test_waits_quietly_when_no_board():
     assert "no Uno Q found" in node.status
 
 
-# ---------- help routing ----------
+# ---------- routing: hold = call the supervisor, short touch = a quiet note ----------
 
-def session(sid, help_count=0):
-    return SimpleNamespace(id=sid, step={"id": 2}, flags={2: {"help": help_count}} if help_count else {})
+def session(sid):
+    return SimpleNamespace(id=sid, step={"id": 2}, flags={})
 
 
 class Router:
-    def __init__(self, sessions):
-        self.events, self.sent, self.buzz, self.timers = [], [], [], []
-        self.r = HelpRouter(sessions, lambda t, **d: self.events.append((t, d)), self.sent.append,
-                            timer=lambda s, fn, args: SimpleNamespace(start=lambda: self.timers.append((fn, args))))
+    """press() returns a done Future with the reply api.wrist_press would give."""
+
+    def __init__(self, sessions, reply=None, fail=False):
+        self.events, self.pressed, self.buzz = [], [], []
+
+        def press(kind, sid):
+            self.pressed.append((kind, sid))
+            f = Future()
+            if fail:
+                f.set_exception(RuntimeError("edge down"))
+            else:
+                f.set_result(reply if reply is not None else {"ok": True, "say": [{"text": kind}], "duplicate": False})
+            return f
+
+        self.r = HelpRouter(sessions, lambda t, **d: self.events.append((t, d)), press)
         self.r.node = SimpleNamespace(send=self.buzz.append)
 
-    def fire_timers(self):
-        for fn, args in self.timers:
-            fn(*args)
 
-
-def test_help_goes_to_the_page_of_the_newest_session():
+def test_hold_calls_the_supervisor_for_the_newest_session():
     t = Router({"old": session("old"), "new": session("new")})
-    t.r.on_help()
-    assert t.events == [("wrist", {"action": "help", "sid": "new", "already": False})]
-    assert t.buzz == []  # CALL only once help is really sent
+    t.r.on_hold()
+    assert t.pressed == [("call", "new")]
+    assert t.events == [("wrist", {"action": "call", "sid": "new", "say": [{"text": "call"}], "duplicate": False})]
 
 
-def test_page_sends_help_then_buzz_and_no_server_duplicate():
+def test_short_touch_sends_a_quiet_note():
     t = Router({"s1": session("s1")})
-    t.r.on_help()
-    t.r.help_sent("s1")  # the page called /coach/s1/help
-    t.fire_timers()
-    assert t.buzz == ["BUZZ"]
-    assert t.sent == []
-    assert ("help_sent", {"sid": "s1"}) in t.events
+    t.r.on_touch()
+    assert t.pressed == [("notify", "s1")]
+    assert t.events[0][1]["action"] == "notify"
+    assert t.buzz == []  # a note never shows CALL
 
 
-def test_server_sends_help_when_no_page_answers():
+def test_call_shows_call_once_help_is_sent():
+    # api.wrist_press runs HELP_SENT_HOOKS for a call; the router's hook buzzes
     t = Router({"s1": session("s1")})
-    t.r.on_help()
-    t.fire_timers()
-    assert t.sent == ["s1"]
+    t.r.on_hold()
+    assert t.buzz == []
+    t.r.help_sent("s1")
+    assert t.buzz == ["BUZZ"] and ("help_sent", {"sid": "s1"}) in t.events
 
 
-def test_no_fallback_for_a_session_that_ended_meanwhile():
-    sessions = {"s1": session("s1")}
-    t = Router(sessions)
-    t.r.on_help()
-    sessions.clear()
-    t.fire_timers()
-    assert t.sent == []
+def test_nothing_sent_and_no_event_when_the_edge_says_no():
+    t = Router({"s1": session("s1")}, reply={"ok": False, "error": "no worker"})
+    t.r.on_hold()
+    assert t.events == [] and t.buzz == []
 
 
-def test_second_hold_on_the_same_step_shows_call_but_does_not_page_again():
-    t = Router({"s1": session("s1", help_count=1)})
-    t.r.on_help()
-    assert t.events[0] == ("wrist", {"action": "help", "sid": "s1", "already": True})
-    assert t.buzz == ["BUZZ"] and t.timers == [] and t.sent == []
+def test_a_failed_press_does_not_raise():
+    t = Router({"s1": session("s1")}, fail=True)
+    t.r.on_hold()
+    assert t.events == [] and t.buzz == []
 
 
-def test_help_with_no_session_is_reported_not_lost_silently():
+def test_press_with_no_session_is_reported_not_lost_silently():
     t = Router({})
-    t.r.on_help()
-    assert t.events == [("wrist", {"action": "no_session"})]
-    assert t.buzz == [] and t.timers == []
-
-
-def test_what_now_targets_the_running_session():
-    t = Router({"s1": session("s1")})
-    t.r.on_what_now()
-    assert t.events == [("wrist", {"action": "what_now", "sid": "s1"})]
+    t.r.on_hold()
+    t.r.on_touch()
+    assert t.pressed == []
+    assert t.events == [("wrist", {"action": "no_session", "kind": "call"}), ("wrist", {"action": "no_session", "kind": "notify"})]
 
 
 def test_help_from_button_or_voice_also_shows_call():

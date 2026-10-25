@@ -2,9 +2,10 @@
 
 Same protocol as hardware/backend/uno_serial_bridge.py and hardware/uno_q/wrist_node/wrist_node.ino:
   Uno -> laptop: DOWN (touch starts), UP (touch ends)
-  laptop -> Uno: ACK (touch seen: one flash), BUZZ (help sent: CALL on the matrix for 2 s)
-  hold >= 1.5 s -> "I'm stuck": help.   shorter -> "What now?": hear the step again.
+  laptop -> Uno: ACK (touch seen: one flash), BUZZ (supervisor called: CALL on the matrix for 2 s)
+  hold >= 1.5 s -> call the supervisor now (rings their screen).   shorter -> a quiet note to the supervisor.
 
+Both go through the same code as POST /wrist/press (api.wrist_press), with the newest face-blurred live frame.
 The port is found by itself (Arduino USB vendor id 0x2341), so the same config works whether
 the board shows up as COM5, /dev/cu.usbmodem..., or /dev/ttyACM0. Set devices.wrist_port to
 force one. Unplugged or missing board: retry quietly every 2 s; the app keeps running.
@@ -51,13 +52,13 @@ def _open_serial(port: str):
 
 
 class WristNode:
-    """Reads touches from the Uno Q and turns them into on_help / on_what_now calls."""
+    """Reads touches from the Uno Q and turns them into on_hold (>= 1.5 s) / on_touch (shorter) calls."""
 
-    def __init__(self, port: str | None = "auto", on_help=None, on_what_now=None, opener=_open_serial,
+    def __init__(self, port: str | None = "auto", on_hold=None, on_touch=None, opener=_open_serial,
                  find=find_port, retry_s: float = 2.0, clock=time.monotonic):
         self.port = port
-        self.on_help = on_help or (lambda: None)
-        self.on_what_now = on_what_now or (lambda: None)
+        self.on_hold = on_hold or (lambda: None)
+        self.on_touch = on_touch or (lambda: None)
         self.opener, self.find, self.retry_s, self.clock = opener, find, retry_s, clock
         self.status = "off"
         self._ser = None
@@ -122,7 +123,7 @@ class WristNode:
                 self.send("ACK")
             elif line == "UP" and pressed_at is not None:
                 held, pressed_at = self.clock() - pressed_at, None
-                action = self.on_help if held >= HOLD_FOR_HELP_S else self.on_what_now
+                action = self.on_hold if held >= HOLD_FOR_HELP_S else self.on_touch
                 try:
                     action()
                 except Exception:  # a bug in the app side must not drop the wrist connection
@@ -130,59 +131,52 @@ class WristNode:
 
 
 class HelpRouter:
-    """Turns wrist touches into coach actions for the session that is running.
+    """Turns wrist touches into supervisor calls and notes for the session that is running.
 
-    The worker's page does the actual help request (it adds a photo from the glasses). If no page
-    answers within fallback_s, the server sends the help itself, so a press never goes nowhere.
-    The Uno gets BUZZ (CALL) only once help has really been sent.
+    press(kind, sid) starts api.wrist_press on the event loop and returns a concurrent Future of its reply.
+    The Uno gets BUZZ (CALL) only once a call has really gone out (help_sent). The worker's page gets a "wrist" event
+    with what to say ("Okay. I'm calling your supervisor now.").
     """
 
-    def __init__(self, sessions: dict, publish, send_help, fallback_s: float = 3.0, timer=threading.Timer):
-        self.sessions, self.publish, self.send_help = sessions, publish, send_help
-        self.fallback_s, self.timer = fallback_s, timer
+    def __init__(self, sessions: dict, publish, press):
+        self.sessions, self.publish, self.press = sessions, publish, press
         self.node: WristNode | None = None
-        self._pending: set[str] = set()
-        self._lock = threading.Lock()
 
     def active(self):
         """The most recently started session, or None. Copied in one step: the event loop may change it meanwhile."""
         current = list(self.sessions.values())
         return current[-1] if current else None
 
-    def on_help(self) -> None:
-        s = self.active()
-        if s is None:
-            log.warning("wrist: help pressed but no coaching session is running")
-            self.publish("wrist", action="no_session")
-            return
-        already = s.flags.get(int(s.step["id"]), {}).get("help", 0) > 0
-        self.publish("wrist", action="help", sid=s.id, already=already)
-        if already:  # help is already on its way for this step: show CALL again, don't page twice
-            self._buzz()
-            return
-        with self._lock:
-            self._pending.add(s.id)
-        self.timer(self.fallback_s, self._fallback, (s.id,)).start()
+    def on_hold(self) -> None:
+        self._send("call")
 
-    def on_what_now(self) -> None:
-        s = self.active()
-        self.publish("wrist", action="what_now", sid=s.id if s else None)
+    def on_touch(self) -> None:
+        self._send("notify")
 
     def help_sent(self, sid: str) -> None:
-        """Called whenever a help request goes out (wrist, button or voice)."""
-        with self._lock:
-            self._pending.discard(sid)
+        """Help sent another way (the page's button or voice): show CALL too."""
         self.publish("help_sent", sid=sid)
         self._buzz()
 
-    def _fallback(self, sid: str) -> None:
-        with self._lock:
-            if sid not in self._pending:
-                return
-            self._pending.discard(sid)
-        if sid in self.sessions:
-            log.info("wrist: no page answered; sending help from the server for %s", sid)
-            self.send_help(sid)
+    def _send(self, kind: str) -> None:
+        s = self.active()
+        if s is None:
+            log.warning("wrist: %s with no coaching session running; nobody to send it for", kind)
+            self.publish("wrist", action="no_session", kind=kind)
+            return
+        self.press(kind, s.id).add_done_callback(lambda f: self._sent(kind, s.id, f))
+
+    def _sent(self, kind: str, sid: str, fut) -> None:
+        try:
+            r = fut.result()
+        except Exception as e:
+            log.warning("wrist %s failed: %s", kind, e)
+            return
+        if not r.get("ok"):
+            log.warning("wrist %s not sent: %s", kind, r.get("error"))
+            return
+        # CALL on the matrix comes from help_sent (api.wrist_press runs HELP_SENT_HOOKS for a call)
+        self.publish("wrist", action=kind, sid=sid, say=r.get("say", []), duplicate=r.get("duplicate", False))
 
     def _buzz(self) -> None:
         if self.node:

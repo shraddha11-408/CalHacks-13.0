@@ -174,7 +174,7 @@ const helpRoute = table(
   { name: 'help_route', public: true },
   {
     helpId: t.u64().primaryKey(),
-    routedTo: t.string(), // buddy | supervisor
+    routedTo: t.string(), // buddy | supervisor | notice (wristband short touch: quiet, never rings or escalates)
     escalatedAt: t.option(t.timestamp()),
   }
 );
@@ -382,6 +382,16 @@ export const callSupervisor = spacetimedb.reducer(
     const h = ctx.db.helpRequest.insert({ id: 0n, ...args, status: 'open', claimedBy: '', note: '', createdAt: ctx.timestamp, resolvedAt: undefined });
     ctx.db.helpRoute.insert({ helpId: h.id, routedTo: 'supervisor', escalatedAt: ctx.timestamp });
     ctx.db.wristCall.insert({ id: 0n, helpId: h.id, workerId: args.workerId, createdAt: ctx.timestamp, answeredAt: undefined });
+  }
+);
+
+// Wristband short touch: a quiet note for the supervisor ("please look when you can"). It sits in the help
+// list routed 'notice': no ringing (no wrist_call), no buddy stage, no escalation timer.
+export const notifySupervisor = spacetimedb.reducer(
+  { sessionId: t.string(), workerId: t.string(), taskId: t.string(), stepId: t.u32(), photo: t.string() },
+  (ctx, args) => {
+    const h = ctx.db.helpRequest.insert({ id: 0n, ...args, status: 'open', claimedBy: '', note: '', createdAt: ctx.timestamp, resolvedAt: undefined });
+    ctx.db.helpRoute.insert({ helpId: h.id, routedTo: 'notice', escalatedAt: undefined });
   }
 );
 

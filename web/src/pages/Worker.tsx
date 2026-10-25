@@ -525,14 +525,15 @@ function WorkerTask({ taskId }: { taskId: string }) {
     }
   }
 
-  // the wrist node (Uno Q on USB serial, edge/stepwise_edge/wrist.py): hold = help, short touch = hear the step
+  // the wrist node (Uno Q on USB serial, edge/stepwise_edge/wrist.py): hold = the supervisor is called (CALL on the
+  // matrix), short touch = a quiet note to the supervisor. The edge sends both; the page speaks the reply.
   useEdgeEvents((e) => {
     if (e.sid !== sidRef.current || phase !== 'running') return
     if (e.type === 'help_sent') setHelpSent(true)
-    else if (e.type === 'wrist' && e.action === 'help') {
-      if (helpSent || e.already) say('Help is coming.')
-      else void help()
-    } else if (e.type === 'wrist' && e.action === 'what_now' && step) say(step.instruction)
+    else if (e.type === 'wrist' && (e.action === 'call' || e.action === 'notify')) {
+      if (e.action === 'call') setHelpSent(true)
+      if (Array.isArray(e.say) && e.say.length) playSay(e.say as Say[], 'answer')
+    }
   })
 
   if (!task) {
